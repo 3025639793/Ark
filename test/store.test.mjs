@@ -39,3 +39,14 @@ test('serialized imports preserve all records and metadata validates',async()=>f
  const image=store.list('default')[0];await assert.rejects(store.edit('default',image.id,{source:'javascript:alert(1)'}),e=>e.status===400);await store.edit('default',image.id,{tags:['标签','标签'],favorite:true});assert.deepEqual(store.list('default').find(i=>i.id===image.id).tags,['标签']);
  await assert.rejects(store.import('default',Buffer.from('<svg/>'),'bad.svg'),e=>e.status===415);
 }));
+test('folder classification survives restart; batch deletion is scoped and validates before deleting',async()=>fixture(async dir=>{
+ let store=new AlbumStore(dir);await store.init();const first=await store.import('default',png,'first.png','图片/原神/芙宁娜');const second=await store.import('default',png,'second.png','图片/原神/纳西妲');const keep=await store.import('default',png,'keep.png');
+ store=new AlbumStore(dir);await store.init();assert.equal(store.list('default').find(i=>i.id===first.id).folder,'图片/原神/芙宁娜');
+ await assert.rejects(store.import('default',png,'bad.png','../../images'),e=>e.status===400);assert.equal(store.list('default').length,3);
+ const snapshot=await store.create({name:'加密文件夹',encrypted:true,password});const vault=snapshot.libraries.at(-1).id;const secret=await store.import(vault,png,'secret.png','图片/秘密分类/角色');
+ assert.equal((await readFile(join(dir,vault,'catalog.enc'))).includes(Buffer.from('秘密分类')),false);
+ await assert.rejects(store.removeBatch('default',[first.id,secret.id]),e=>e.status===404);assert.equal(store.list('default').length,3);
+ const result=await store.removeBatch('default',[first.id,second.id,first.id]);assert.deepEqual(result.deletedIds,[first.id,second.id]);assert.equal(result.cleanupFailures,0);assert.deepEqual(store.list('default').map(i=>i.id),[keep.id]);
+ await assert.rejects(readFile(join(dir,'default','images',first.id)),e=>e.code==='ENOENT');assert.deepEqual((await store.file('default',keep.id)).bytes,png);
+ store.lock(vault);await assert.rejects(store.removeBatch(vault,[secret.id]),e=>e.status===423);await store.unlock(vault,password);await store.removeBatch(vault,[secret.id]);assert.equal(store.list(vault).length,0);
+}));

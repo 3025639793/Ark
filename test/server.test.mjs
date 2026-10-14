@@ -15,15 +15,15 @@ test('local-only API protects library operations, supports encrypted imports and
  const wrongHost=await new Promise((resolve,reject)=>{const req=http.get(app.url+'/api/state',{headers:{Host:'attacker.example','X-Ark-Token':token}},res=>{res.resume();resolve(res.statusCode);});req.on('error',reject);});assert.equal(wrongHost,403);
  assert.equal((await request('/api/libraries',{method:'POST',headers:{Origin:'https://other.example'},body:'{}'})).status,403);
  const create=await request('/api/libraries',{method:'POST',body:JSON.stringify({name:'加密库',encrypted:true,password:'test-password'})});assert.equal(create.status,201);const id=(await create.json()).libraries.at(-1).id;
- const result=await request(`/api/libraries/${id}/images?filename=portrait.png`,{method:'POST',body:png});assert.equal(result.status,201);const image=await result.json();const file=`/api/libraries/${id}/images/${image.id}/file`;
+ const result=await request(`/api/libraries/${id}/images?filename=portrait.png&folder=%E5%9B%BE%E7%89%87%2F%E8%A7%92%E8%89%B2`,{method:'POST',body:png});assert.equal(result.status,201);const image=await result.json();const file=`/api/libraries/${id}/images/${image.id}/file`;
  assert.equal((await fetch(app.url+file)).status,403);const bytes=await fetch(app.url+file,{headers:{cookie}});assert.deepEqual(Buffer.from(await bytes.arrayBuffer()),png);
  const changed=await request(`/api/libraries/${id}/images/${image.id}`,{method:'PATCH',body:JSON.stringify({character:'芙莉莲',tags:['壁纸']})});assert.equal(changed.status,200);
  assert.equal((await request(`/api/libraries/${id}/lock`,{method:'POST'})).status,200);assert.equal((await request(file)).status,423);assert.equal((await request(`/api/libraries/${id}/images`)).status,423);
  assert.equal((await request('/api/random',{method:'POST',body:'{}'})).status,404);
  assert.equal((await request(`/api/libraries/${id}/unlock`,{method:'POST',body:JSON.stringify({password:'incorrect'})})).status,401);
  assert.equal((await request(`/api/libraries/${id}/unlock`,{method:'POST',body:JSON.stringify({password:'test-password'})})).status,200);
- const rows=await (await request(`/api/libraries/${id}/images`)).json();assert.equal(rows[0].character,'芙莉莲');
+ const rows=await (await request(`/api/libraries/${id}/images`)).json();assert.equal(rows[0].character,'芙莉莲');assert.equal(rows[0].folder,'图片/角色');
  assert.equal((await request(`/api/libraries/${id}/images`,{method:'POST',body:Buffer.alloc(25*1024*1024+1)})).status,413);
- assert.equal((await request(`/api/libraries/${id}/images/${image.id}`,{method:'DELETE'})).status,200);assert.equal((await request(file)).status,404);
+ assert.equal((await request(`/api/libraries/${id}/images/batch-delete`,{method:'POST',body:JSON.stringify({ids:[image.id]})})).status,200);assert.equal((await request(file)).status,404);
  }finally{await app?.close();await rm(dir,{recursive:true,force:true});}
 });

@@ -38,6 +38,8 @@ export async function startLocalApp({dataDir=process.env.ARK_DATA_DIR||join(root
     if(path==='/api/random'&&req.method==='POST')return json(res,200,store.random(await input(req)));
     if(path==='/api/lock-all'&&req.method==='POST'){store.lockAll();return json(res,200,store.state());}
     if(path==='/api/libraries'&&req.method==='POST')return json(res,201,await store.create(await input(req)));
+    const batch=/^\/api\/libraries\/(default|[a-f0-9-]{36})\/images\/batch-delete$/.exec(path);
+    if(batch&&req.method==='POST'){const value=await input(req);return json(res,200,await store.removeBatch(batch[1],value.ids));}
     const match=/^\/api\/libraries\/(default|[a-f0-9-]{36})(?:\/(unlock|lock|random|images)(?:\/([a-f0-9-]{36})(\/file)?)?)?$/.exec(path);
     if(!match)fail(404,'接口不存在。');const [,id,action,imageId,file]=match;store.library(id);
     if(action==='unlock'&&req.method==='POST'){
@@ -48,7 +50,7 @@ export async function startLocalApp({dataDir=process.env.ARK_DATA_DIR||join(root
     if(action==='random'&&req.method==='PATCH'){const value=await input(req);return json(res,200,await store.allowRandom(id,value?.allowRandom));}
     if(action==='images'&&!imageId){
      if(req.method==='GET')return json(res,200,store.list(id));
-     if(req.method==='POST'){store.access(id);const bytes=await body(req,25*1024*1024);return json(res,201,await store.import(id,bytes,url.searchParams.get('filename')||'未命名图片'));}
+     if(req.method==='POST'){store.access(id);const bytes=await body(req,25*1024*1024);return json(res,201,await store.import(id,bytes,url.searchParams.get('filename')||'未命名图片',url.searchParams.get('folder')||''));}
     }
     if(action==='images'&&imageId){
      if(file&&req.method==='GET'){const {image,bytes}=await store.file(id,imageId);res.writeHead(200,{...headers,'Content-Type':image.mime,'Content-Length':bytes.length,...(url.searchParams.has('download')?{'Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(image.filename).replace(/'/g,'%27')}`}:{})});return res.end(bytes);}

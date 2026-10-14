@@ -21,6 +21,16 @@ test('album UI imports, edits, creates a vault and removes displayed images on l
   await w.upload([new File([png],'portrait.png',{type:'image/png'})]);assert.equal($('gallery').querySelectorAll('.card').length,1);
   $('gallery').querySelector('.card-open').click();assert.equal($('detail').open,true);const edit=$('edit-form');edit.elements.character.value='芙莉莲';edit.elements.tags.value='壁纸，冬天';edit.dispatchEvent(new w.Event('submit',{cancelable:true}));
   await waitUntil(()=>$('character-list').textContent.includes('芙莉莲'));$('detail').close();
+  const folderFile=new File([png],'folder.png',{type:'image/png'});Object.defineProperty(folderFile,'webkitRelativePath',{value:'图片/原神/芙宁娜/folder.png'});
+  const otherFile=new File([png],'other.png',{type:'image/png'});Object.defineProperty(otherFile,'webkitRelativePath',{value:'图片/其他/other.png'});
+  const textFile=new File(['hello'],'note.txt',{type:'text/plain'});Object.defineProperty(textFile,'webkitRelativePath',{value:'图片/note.txt'});
+  Object.defineProperty($('folder-input'),'files',{configurable:true,value:[folderFile,otherFile,textFile]});$('folder-input').dispatchEvent(new w.Event('change'));
+  await waitUntil(()=>$('all-count').textContent==='3'&&!$('folder-trigger').disabled);assert.equal($('gallery').querySelectorAll('.card').length,3);
+  assert.ok([...$('folder-filter').options].some(o=>o.value==='图片/原神'));$('folder-filter').value='图片/原神';$('folder-filter').dispatchEvent(new w.Event('change'));assert.equal($('gallery').querySelectorAll('.card').length,1);assert.match($('gallery').textContent,/folder/);
+  $('select-toggle').click();$('select-all').click();w.confirm=()=>false;$('batch-delete').click();assert.equal($('all-count').textContent,'3');
+  w.confirm=message=>{assert.match(message,/1 张/);assert.match(message,/原始文件夹不受影响/);return true;};$('batch-delete').click();await waitUntil(()=>$('all-count').textContent==='2');assert.equal($('gallery').querySelectorAll('.card').length,2);assert.ok(!$('gallery').textContent.includes('folder'));
+  $('folder-filter').value='';$('folder-filter').dispatchEvent(new w.Event('change'));assert.equal($('gallery').querySelectorAll('.card').length,2);$('select-toggle').click();$('select-all').click();w.confirm=message=>{assert.match(message,/2 张/);return true;};$('batch-delete').click();await waitUntil(()=>$('all-count').textContent==='0');
+  w.confirm=()=>true;await w.upload([new File([png],'portrait.png',{type:'image/png'})]);
   $('random-trigger').click();await waitUntil(()=>$('random-image').hasAttribute('src'));assert.match($('random-caption').textContent,/portrait/);$('random-dialog').close();
   $('new-library').click();const form=$('new-library-form');form.elements.name.value='私密角色';form.elements.encrypted.checked=true;form.elements.encrypted.dispatchEvent(new w.Event('change'));form.elements.password.value='ui-test-password';form.elements.confirm.value='ui-test-password';
   form.dispatchEvent(new w.Event('submit',{cancelable:true}));await waitUntil(()=>$('library-select').options.length===2&&!$('new-library-dialog').open);await waitUntil(()=>$('gallery').querySelectorAll('.card').length===0);
