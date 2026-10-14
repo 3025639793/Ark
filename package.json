@@ -1,14 +1,51 @@
 {
-  "name": "ark-image-library",
-  "version": "0.1.0",
+  "name": "ark-local-album",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "engines": {
     "node": ">=24 <25"
   },
   "scripts": {
-    "start": "node server.mjs",
+    "start": "electron .",
+    "start:local": "node server.mjs",
     "test": "node --test test/*.test.mjs",
-    "check": "node --check server.mjs && node --check public/app.js"
+    "check": "node --check server.mjs && node --check lib/store.mjs && node --check public/app.js && node --check desktop/main.cjs && node --check desktop/preload.cjs",
+    "build:win": "electron-builder --win zip",
+    "build:linux": "electron-builder --linux dir"
+  },
+  "description": "Ark — 本地图片相册与加密收藏库",
+  "author": "Aeval",
+  "main": "desktop/main.cjs",
+  "devDependencies": {
+    "electron": "44.7.2",
+    "electron-builder": "26.15.3",
+    "jsdom": "^30.1.2"
+  },
+  "build": {
+    "appId": "com.aeval.ark",
+    "productName": "Ark",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "desktop/**/*",
+      "public/**/*",
+      "lib/**/*",
+      "server.mjs",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "zip"
+      ],
+      "artifactName": "Ark-${version}-windows-${arch}.${ext}"
+    },
+    "extraFiles": [
+      {
+        "from": "WINDOWS-开始使用.txt",
+        "to": "开始使用.txt"
+      }
+    ]
   }
 }
