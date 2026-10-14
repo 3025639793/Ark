@@ -1,0 +1,13 @@
+services:
+  ark:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      ARK_PASSWORD: ${ARK_PASSWORD:?请在 .env 中设置至少 12 字符的访问密码}
+      ARK_SECURE_COOKIE: ${ARK_SECURE_COOKIE:-0}
+    volumes:
+      - ark-data:/app/data
+volumes:
+  ark-data:
