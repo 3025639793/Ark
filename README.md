@@ -4,6 +4,10 @@
 
 ## Windows 使用
 
+**[下载 Windows 免安装版](https://github.com/3025639793/Ark/releases/latest)**
+
+打开发布页面，在 **Assets** 中选择 `Ark-0.2.0-windows-x64.zip`。`Source code` 是源码，不是软件包。
+
 使用 `Ark-0.2.0-windows-x64.zip`：**完整解压**到一个文件夹，双击其中的 `Ark.exe`。不要单独复制 exe，也不要直接在压缩包中运行。首次使用不用登录，普通库开箱即用。
 
 这个版本支持 Windows 10 / 11 的 x64 电脑。它是未签名的自制应用；Windows 可能显示发布者未验证的提示。
@@ -77,3 +81,7 @@ npm test
 测试覆盖本地 API 保护、加密文件与元数据不落明文、错误密码、篡改检测、闲置锁定、重启后保护、随机展示权限组合、并发导入，以及 DOM 交互中的导入、分类、建库、随机展示与锁定清屏。
 
 自动界面测试使用 jsdom，不替代 Windows 实机启动与视觉检查。当前开发环境为 Linux，Windows ZIP 已交叉打包，尚未在 Windows 实机运行。
+
+## 发布版本
+
+推送与 `package.json` 版本一致的 `v*` 标签，会触发 `.github/workflows/release-windows.yml`。GitHub Actions 在 Windows 上检查、测试、打包，并将 ZIP 与 SHA-256 校验文件发布到 Releases。
