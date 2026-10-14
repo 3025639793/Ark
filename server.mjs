@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AlbumStore, fail } from './lib/store.mjs';
+import { ThemeStore } from './lib/theme.mjs';
 const root=dirname(fileURLToPath(import.meta.url));
 const headers={
  'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','Cache-Control':'no-store',
@@ -14,8 +15,8 @@ async function body(req,limit=32768){if(Number(req.headers['content-length'])>li
 async function input(req){try{const value=JSON.parse((await body(req)).toString());if(!value||typeof value!=='object'||Array.isArray(value))fail(400,'请求格式有误。');return value;}catch(e){if(e.status)throw e;fail(400,'请求格式有误。');}}
 function equal(value,token){return typeof value==='string'&&value.length===token.length&&timingSafeEqual(Buffer.from(value),Buffer.from(token));}
 export async function startLocalApp({dataDir=process.env.ARK_DATA_DIR||join(root,'data'),port=Number(process.env.PORT||0)}={}){
- const store=new AlbumStore(resolve(dataDir));await store.init();const token=randomBytes(32).toString('hex');
- const assets=new Map(await Promise.all(['index.html','app.js','style.css'].map(async file=>['/'+file,await readFile(join(root,'public',file))])));
+ const store=new AlbumStore(resolve(dataDir));await store.init();const theme=new ThemeStore(resolve(dataDir));await theme.init();const token=randomBytes(32).toString('hex');
+ const assets=new Map(await Promise.all(['index.html','app.js','style.css','theme.css','theme.js','mascot.svg','mascot.png'].map(async file=>['/'+file,await readFile(join(root,'public',file)).catch(error=>{if(file==='mascot.png'&&error.code==='ENOENT')return readFile(join(root,'public','mascot.svg'));throw error;})])));
  const attempts=new Map();
  const server=http.createServer(async(req,res)=>{
   try{
@@ -27,12 +28,19 @@ export async function startLocalApp({dataDir=process.env.ARK_DATA_DIR||join(root
    if(!path.startsWith('/api/')){
     const asset=path==='/'?'/index.html':path;if(!['GET','HEAD'].includes(req.method)||!assets.has(asset))fail(404,'页面不存在。');
     let bytes=assets.get(asset);if(asset==='/index.html'){bytes=Buffer.from(bytes.toString().replace('<!--LOCAL_TOKEN-->',`<meta name="ark-token" content="${token}">`));res.setHeader('Set-Cookie',`ark_local=${token}; HttpOnly; SameSite=Strict; Path=/`);}
-    res.writeHead(200,{...headers,'Content-Type':asset.endsWith('.js')?'text/javascript; charset=utf-8':asset.endsWith('.css')?'text/css; charset=utf-8':'text/html; charset=utf-8'});return res.end(req.method==='HEAD'?undefined:bytes);
+    res.writeHead(200,{...headers,'Content-Type':asset.endsWith('.js')?'text/javascript; charset=utf-8':asset.endsWith('.css')?'text/css; charset=utf-8':asset.endsWith('.svg')?'image/svg+xml':asset.endsWith('.png')?(bytes[0]===137?'image/png':'image/svg+xml'):'text/html; charset=utf-8'});return res.end(req.method==='HEAD'?undefined:bytes);
    }
-   const isFile=/^\/api\/libraries\/[^/]+\/images\/[^/]+\/file$/.test(path);
+   const isFile=path==='/api/theme/image'||/^\/api\/libraries\/[^/]+\/images\/[^/]+\/file$/.test(path);
    const cookie=/(?:^|;\s*)ark_local=([a-f0-9]{64})(?:;|$)/.exec(req.headers.cookie||'')?.[1];
    if(!equal(req.headers['x-ark-token'],token)&&!(req.method==='GET'&&isFile&&equal(cookie,token)))fail(403,'本地访问令牌无效，请重新打开相册。');
    await store.serial(async()=>{
+    if(path==='/api/theme'&&req.method==='GET')return json(res,200,theme.state());
+    if(path==='/api/theme'&&req.method==='PATCH')return json(res,200,await theme.settings(await input(req)));
+    if(path==='/api/theme/image'){
+     if(req.method==='POST')return json(res,200,await theme.setImage(await body(req,10*1024*1024)));
+     if(req.method==='DELETE')return json(res,200,await theme.clearImage());
+     if(req.method==='GET'){const {bytes,mime}=await theme.image();res.writeHead(200,{...headers,'Content-Type':mime,'Content-Length':bytes.length});return res.end(bytes);}
+    }
     if(path==='/api/state'&&req.method==='GET')return json(res,200,store.state());
     if(path==='/api/settings'&&req.method==='PATCH')return json(res,200,await store.settings(await input(req)));
     if(path==='/api/random'&&req.method==='POST')return json(res,200,store.random(await input(req)));

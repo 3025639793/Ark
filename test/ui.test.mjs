@@ -47,6 +47,10 @@ test('album UI imports, edits, creates a vault and removes displayed images on l
   updateListener({status:'downloading',currentVersion:'0.4.0',message:'下载中',progress:50});assert.equal($('update-progress').value,50);
   updateListener({status:'available',currentVersion:'0.4.0',message:'可下载',progress:0});$('download-update').click();await waitUntil(()=>!$('install-update').hidden);
   w.confirm=()=>false;$('install-update').click();assert.equal(installed,0);w.confirm=()=>true;$('install-update').click();await waitUntil(()=>installed===1);
+  await waitUntil(()=>typeof $('melusine-logo').onclick==='function');$('melusine-logo').click();$('melusine-logo').click();$('melusine-logo').click();assert.equal($('village-passport').open,true);$('village-passport').close();
+  $('easter-eggs-enabled').checked=false;$('easter-eggs-enabled').dispatchEvent(new w.Event('change'));await waitUntil(()=>w.document.documentElement.dataset.easterEggs==='off');$('melusine-logo').click();$('melusine-logo').click();$('melusine-logo').click();assert.equal($('village-passport').open,false);
+  Object.defineProperty($('theme-art-input'),'files',{configurable:true,value:[new File([png],'美露莘.png',{type:'image/png'})]});$('theme-art-input').dispatchEvent(new w.Event('change'));await waitUntil(()=>!$('reset-theme-art').hidden);assert.match($('theme-art').getAttribute('src'),/api\/theme\/image/);
+  $('reset-theme-art').click();await waitUntil(()=>$('reset-theme-art').hidden);assert.equal($('theme-art').getAttribute('src'),'/mascot.png');
   assert.deepEqual(errors,[]);
  }finally{dom?.window.close();await app?.close();await rm(dir,{recursive:true,force:true});}
 });

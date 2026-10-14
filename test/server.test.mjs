@@ -14,6 +14,7 @@ test('local-only API protects library operations, supports encrypted imports and
  assert.equal((await fetch(app.url+'/api/state')).status,403);
  const wrongHost=await new Promise((resolve,reject)=>{const req=http.get(app.url+'/api/state',{headers:{Host:'attacker.example','X-Ark-Token':token}},res=>{res.resume();resolve(res.statusCode);});req.on('error',reject);});assert.equal(wrongHost,403);
  assert.equal((await request('/api/libraries',{method:'POST',headers:{Origin:'https://other.example'},body:'{}'})).status,403);
+ const themeUpload=await request('/api/theme/image',{method:'POST',body:png});assert.equal(themeUpload.status,200);assert.equal((await fetch(app.url+'/api/theme/image')).status,403);assert.deepEqual(Buffer.from(await (await fetch(app.url+'/api/theme/image',{headers:{cookie}})).arrayBuffer()),png);
  const create=await request('/api/libraries',{method:'POST',body:JSON.stringify({name:'加密库',encrypted:true,password:'test-password'})});assert.equal(create.status,201);const id=(await create.json()).libraries.at(-1).id;
  const result=await request(`/api/libraries/${id}/images?filename=portrait.png&folder=%E5%9B%BE%E7%89%87%2F%E8%A7%92%E8%89%B2`,{method:'POST',body:png});assert.equal(result.status,201);const image=await result.json();const file=`/api/libraries/${id}/images/${image.id}/file`;
  assert.equal((await fetch(app.url+file)).status,403);const bytes=await fetch(app.url+file,{headers:{cookie}});assert.deepEqual(Buffer.from(await bytes.arrayBuffer()),png);

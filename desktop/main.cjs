@@ -13,7 +13,7 @@ else{
  app.whenReady().then(async()=>{
   const { startLocalApp }=await import('../server.mjs');
   const dataDir=path.join(app.getPath('userData'),'album-data');localApp=await startLocalApp({dataDir});
-  window=new BrowserWindow({width:1280,height:850,minWidth:800,minHeight:600,title:'Ark · 本地相册',backgroundColor:'#f5f3f0',autoHideMenuBar:true,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,partition:'ark-local-session'}});
+  window=new BrowserWindow({width:1280,height:850,minWidth:800,minHeight:600,title:'Ark · 本地相册',backgroundColor:'#f4effb',autoHideMenuBar:true,icon:path.join(__dirname,'../public/mascot.png'),webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,partition:'ark-local-session'}});
   const origin=localApp.url;
   window.webContents.setWindowOpenHandler(()=>({action:'deny'}));
   window.webContents.on('will-navigate',(event,url)=>{if(new URL(url).origin!==origin)event.preventDefault();});

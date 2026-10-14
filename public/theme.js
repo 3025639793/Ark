@@ -1,0 +1,17 @@
+(()=>{
+ const find=id=>document.getElementById(id);
+ let config={easterEggs:true,hasImage:false,imageId:''};
+ let greetings=0,logoClicks=0;
+ const whispers=['亮晶晶的喜欢，要好好收起来。','今天的任务：给一份喜欢找到家。','这是宝物，不是奇怪的小零件。','海沫村的灯，总会为小小的发现留着。','收藏配方：一颗星星，三份喜欢。'];
+ function apply(value){config=value;document.documentElement.dataset.easterEggs=value.easterEggs?'on':'off';find('easter-eggs-enabled').checked=value.easterEggs;find('reset-theme-art').hidden=!value.hasImage;find('theme-art').src=value.hasImage?`/api/theme/image?v=${value.imageId}`:'/mascot.png';if(!value.easterEggs)find('village-passport').close();}
+ find('choose-theme-art').onclick=()=>find('theme-art-input').click();
+ find('theme-art-input').onchange=async event=>{const file=event.target.files?.[0];event.target.value='';if(!file)return;const button=find('choose-theme-art');button.disabled=true;
+  try{if(file.size>10*1024*1024)throw new Error('主题图片最多 10 MB。');apply(await api('/api/theme/image',{method:'POST',headers:{'Content-Type':file.type},body:file}));find('theme-status').textContent='主题图片已保存，仅在本机使用。';}
+  catch(e){find('theme-status').textContent=e.message;}finally{button.disabled=false;}
+ };
+ find('reset-theme-art').onclick=async()=>{try{apply(await api('/api/theme/image',{method:'DELETE'}));find('theme-status').textContent='已恢复收藏室的小美露莘。';}catch(e){find('theme-status').textContent=e.message;}};
+ find('easter-eggs-enabled').onchange=async event=>{try{apply(await api('/api/theme',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({easterEggs:event.target.checked})}));find('theme-status').textContent='主题设置已保存。';}catch(e){event.target.checked=config.easterEggs;find('theme-status').textContent=e.message;}};
+ find('melusine-guide').onclick=()=>{if(!config.easterEggs)return;const line=whispers[greetings++%whispers.length];find('melusine-guide').querySelector('span').textContent=line;find('village-whisper').textContent=line;};
+ find('melusine-logo').onclick=event=>{event.preventDefault();if(!config.easterEggs)return;if(++logoClicks%3===0)find('village-passport').showModal();else find('melusine-guide').click();};
+ api('/api/theme').then(apply).catch(()=>{find('theme-status').textContent='主题设置暂时无法读取，请稍后重试。';});
+})();

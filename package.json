@@ -1,6 +1,6 @@
 {
   "name": "ark-local-album",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -10,7 +10,7 @@
     "start": "electron .",
     "start:local": "node server.mjs",
     "test": "node --test test/*.test.mjs",
-    "check": "node --check server.mjs && node --check lib/store.mjs && node --check public/app.js && node --check desktop/main.cjs && node --check desktop/preload.cjs && node --check desktop/updater.cjs",
+    "check": "node --check server.mjs && node --check lib/store.mjs && node --check public/app.js && node --check desktop/main.cjs && node --check desktop/preload.cjs && node --check desktop/updater.cjs && node --check lib/theme.mjs && node --check public/theme.js",
     "build:win": "electron-builder --win",
     "build:linux": "electron-builder --linux dir"
   },
@@ -41,7 +41,8 @@
         "zip"
       ],
       "artifactName": "Ark-${version}-windows-${arch}.${ext}",
-      "verifyUpdateCodeSignature": false
+      "verifyUpdateCodeSignature": false,
+      "icon": "build/icon.png"
     },
     "extraFiles": [
       {
