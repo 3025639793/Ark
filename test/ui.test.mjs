@@ -8,7 +8,7 @@ import {startLocalApp} from '../server.mjs';
 const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=','base64');
 async function waitUntil(fn){const deadline=Date.now()+10000;while(!fn()){if(Date.now()>deadline)throw Error('UI condition timed out');await new Promise(resolve=>setTimeout(resolve,20));}}
 test('album UI imports, edits, creates a vault and removes displayed images on lock',async()=>{
- const dir=await mkdtemp(join(tmpdir(),'ark-ui-'));let app,dom;const errors=[];
+ const dir=await mkdtemp(join(tmpdir(),'ark-ui-'));let app,dom;const errors=[];let updateListener;let installed=0;
  try{
   app=await startLocalApp({dataDir:dir});const console=new VirtualConsole();console.on('jsdomError',e=>errors.push(e.message));
   dom=await JSDOM.fromURL(app.url,{resources:'usable',runScripts:'dangerously',virtualConsole:console,beforeParse(window){
@@ -16,6 +16,7 @@ test('album UI imports, edits, creates a vault and removes displayed images on l
    window.HTMLDialogElement.prototype.showModal=function(){this.open=true;};
    window.HTMLDialogElement.prototype.close=function(){if(!this.open)return;this.open=false;this.dispatchEvent(new window.Event('close'));};
    window.confirm=()=>true;
+   window.arkDesktop={openDataFolder:async()=>{},onLibrariesLocked:()=>{},getUpdateState:async()=>({status:'idle',currentVersion:'0.4.0',message:'可以检查更新',progress:0}),onUpdateState:callback=>{updateListener=callback;},checkForUpdates:async()=>({status:'available',currentVersion:'0.4.0',version:'0.5.0',message:'发现新版本',progress:0}),downloadUpdate:async()=>({status:'ready',currentVersion:'0.4.0',version:'0.5.0',message:'下载完成',progress:100}),installUpdate:async()=>{installed++;return {status:'installing',currentVersion:'0.4.0',message:'正在安装',progress:100};}};
   }});
   const w=dom.window;const $=id=>w.document.getElementById(id);await waitUntil(()=>$('library-select').options.length===1);
   await w.upload([new File([png],'portrait.png',{type:'image/png'})]);assert.equal($('gallery').querySelectorAll('.card').length,1);
@@ -41,6 +42,11 @@ test('album UI imports, edits, creates a vault and removes displayed images on l
   $('settings-trigger').click();$('allow-encrypted').checked=true;const vaultCheckbox=$('random-libraries').querySelectorAll('input')[1];vaultCheckbox.checked=true;$('settings-form').dispatchEvent(new w.Event('submit',{cancelable:true}));await waitUntil(()=>!$('settings-dialog').open);
   $('random-trigger').click();const vaultId=$('library-select').value;$('random-scope').value=vaultId;await waitUntil(()=>$('random-next').disabled===false);$('random-scope').dispatchEvent(new w.Event('change'));await waitUntil(()=>$('random-caption').textContent.includes('加密库'));
   $('lock-all').click();await waitUntil(()=>!$('random-dialog').open);assert.equal($('random-image').hasAttribute('src'),false);assert.equal($('random-caption').textContent,'');
+  await waitUntil(()=>!$('update-panel').hidden);assert.match($('app-version').textContent,/0.4.0/);
+  $('check-update').click();await waitUntil(()=>!$('download-update').hidden);assert.equal($('update-banner').hidden,false);
+  updateListener({status:'downloading',currentVersion:'0.4.0',message:'下载中',progress:50});assert.equal($('update-progress').value,50);
+  updateListener({status:'available',currentVersion:'0.4.0',message:'可下载',progress:0});$('download-update').click();await waitUntil(()=>!$('install-update').hidden);
+  w.confirm=()=>false;$('install-update').click();assert.equal(installed,0);w.confirm=()=>true;$('install-update').click();await waitUntil(()=>installed===1);
   assert.deepEqual(errors,[]);
  }finally{dom?.window.close();await app?.close();await rm(dir,{recursive:true,force:true});}
 });

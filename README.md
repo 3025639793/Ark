@@ -4,11 +4,13 @@
 
 ## Windows 使用
 
-**[下载 Windows 免安装版](https://github.com/3025639793/Ark/releases/latest)**
+**[下载 Windows 安装版](https://github.com/3025639793/Ark/releases/latest)**
 
-打开发布页面，在 **Assets** 中选择 `Ark-0.3.0-windows-x64.zip`。`Source code` 是源码，不是软件包。
+打开发布页面，在 **Assets** 中下载 `Ark-Setup-0.4.0-x64.exe`，双击安装。安装完成后可从桌面或开始菜单启动 Ark。无需安装 Node.js。
 
-使用 `Ark-0.3.0-windows-x64.zip`：**完整解压**到一个文件夹，双击其中的 `Ark.exe`。不要单独复制 exe，也不要直接在压缩包中运行。首次使用不用登录，普通库开箱即用。
+已有 v0.2 / v0.3 免安装版：先退出旧版，再运行这个安装程序。安装版沿用 `%APPDATA%\Ark\album-data`，旧图片、分类和加密库会继续保留。旧版没有更新功能，首次升级到安装版须手动进行。
+
+同时提供 `Ark-0.4.0-windows-x64.zip` 免安装包：完整解压后运行 `Ark.exe`。免安装版不提供软件内更新；`Source code` 是源码，不是安装包。
 
 这个版本支持 Windows 10 / 11 的 x64 电脑。它是未签名的自制应用；Windows 可能显示发布者未验证的提示。
 
@@ -17,6 +19,18 @@
 3. 点击「新建库」，可创建普通库或设置独立密码的加密库。
 4. 点击「随机展示」换一张图片，或按 5 / 10 / 30 秒自动切换。
 5. 在「设置」中指定哪些库参与随机展示，以及是否允许展示加密库。
+
+## 软件内更新（Windows 安装版）
+
+安装版启动后联网检查 GitHub Releases。发现较新稳定版本时显示提示，在「设置 → 软件更新」中也可以手动检查。
+
+1. 点击「下载更新」，下载完成前可以继续浏览。
+2. 下载完成后点击「重启并安装」，确认后关闭相册并运行新版安装程序。
+3. 安装完成后重新启动，原有数据继续使用，加密库保持锁定。
+
+不会自行下载，也不会在普通退出时偷偷安装。导入或批量删除期间，下载和安装按钮暂时禁用。网络不可用不影响本地相册，稍后可重新检查。
+
+后续版本必须继续发布安装 EXE、对应 `.blockmap` 和 `latest.yml`，才能被软件发现。每次发布流程会核对安装包的 SHA-512 与更新元数据。当前应用未签名，没有证书签名验证；更新使用 HTTPS 获取这个仓库的发布文件并验证文件散列。
 
 ## 文件夹导入与批量删除
 
@@ -73,7 +87,7 @@ node server.mjs
 
 打开终端输出的本地地址即可。服务只监听 `127.0.0.1`，不提供局域网或外网访问。浏览器模式数据位于项目 `data/`，与桌面版本的数据目录不同；可通过 `ARK_DATA_DIR` 指定目录。不要同时运行两个进程操作同一个数据目录。
 
-Windows 打包（生成免安装 ZIP）：
+Windows 打包（生成安装 EXE、免安装 ZIP 和更新元数据）：
 
 ```sh
 npm run build:win
@@ -90,8 +104,8 @@ npm test
 
 测试覆盖本地 API 保护、加密文件与元数据不落明文、错误密码、篡改检测、闲置锁定、重启后保护、随机展示权限组合、并发导入、目录分类持久化、按库批量删除，以及 DOM 交互中的导入、分类、建库、随机展示与锁定清屏。
 
-自动界面测试使用 jsdom，不替代 Windows 实机启动与视觉检查。当前开发环境为 Linux，Windows ZIP 已交叉打包，尚未在 Windows 实机运行。
+自动界面测试使用 jsdom，不替代 Windows 实机启动与视觉检查。安装包在 GitHub Actions 的 Windows 环境中构建并验证更新元数据；首次安装与实际跨版本更新尚待 Windows 实机确认。
 
 ## 发布版本
 
-推送与 `package.json` 版本一致的 `v*` 标签，会触发 `.github/workflows/release-windows.yml`。GitHub Actions 在 Windows 上检查、测试、打包，并将 ZIP 与 SHA-256 校验文件发布到 Releases。
+推送与 `package.json` 版本一致的 `v*` 标签，会触发 `.github/workflows/release-windows.yml`。GitHub Actions 在 Windows 上检查、测试、打包并验证更新元数据，将安装 EXE、ZIP、blockmap、latest.yml 和 SHA-256 校验文件发布到 Releases。

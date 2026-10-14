@@ -26,18 +26,21 @@ jobs:
       - run: npm run check
       - run: npm test
       - run: npm run build:win -- --publish never
+      - run: node scripts/verify-windows-release.cjs
       - name: Add checksum
         shell: pwsh
         run: |
-          $archive = Get-ChildItem release/Ark-*-windows-x64.zip | Select-Object -First 1
-          if (-not $archive) { throw 'Windows package is missing' }
-          $hash = (Get-FileHash $archive.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-          [System.IO.File]::WriteAllText("$($archive.FullName).sha256", "$hash  $($archive.Name)`n")
+          $archives = Get-ChildItem release/Ark-* | Where-Object { $_.Extension -in '.exe', '.zip' }
+          if ($archives.Count -lt 2) { throw 'Installer or ZIP is missing' }
+          foreach ($archive in $archives) {
+            $hash = (Get-FileHash $archive.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            [System.IO.File]::WriteAllText("$($archive.FullName).sha256", "$hash  $($archive.Name)`n")
+          }
       - name: Publish download
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $archive = Get-ChildItem release/Ark-*-windows-x64.zip | Select-Object -First 1
-          gh release create $env:GITHUB_REF_NAME $archive.FullName "$($archive.FullName).sha256" --repo $env:GITHUB_REPOSITORY --verify-tag --title "Ark $env:GITHUB_REF_NAME · Windows 本地相册" --notes-file .github/release-notes.md
+          $assets = @(Get-ChildItem release -File | Where-Object { $_.Name -match '^Ark-.*\.(exe|zip|blockmap|sha256)$' -or $_.Name -eq 'latest.yml' } | ForEach-Object { $_.FullName })
+          gh release create $env:GITHUB_REF_NAME @assets --repo $env:GITHUB_REPOSITORY --verify-tag --title "Ark $env:GITHUB_REF_NAME · Windows 本地相册" --notes-file .github/release-notes.md
           if ($LASTEXITCODE -ne 0) { throw 'Release publication failed' }

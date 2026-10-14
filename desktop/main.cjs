@@ -1,5 +1,8 @@
 const { app, BrowserWindow, ipcMain, shell, powerMonitor } = require('electron');
 const path = require('node:path');
+const { existsSync } = require('node:fs');
+const { autoUpdater } = require('electron-updater');
+const { UpdateController } = require('./updater.cjs');
 app.setName('Ark');
 app.setPath('userData',path.join(app.getPath('appData'),'Ark'));
 let localApp, window;
@@ -16,7 +19,17 @@ else{
   window.webContents.on('will-navigate',(event,url)=>{if(new URL(url).origin!==origin)event.preventDefault();});
   ipcMain.handle('ark:open-data-folder',async event=>{if(event.sender!==window?.webContents)return;await shell.openPath(dataDir);});
   powerMonitor.on('lock-screen',async()=>{await localApp.store.serial(()=>localApp.store.lockAll());window?.webContents.send('ark:libraries-locked');});
+  const updates=new UpdateController({
+   updater:autoUpdater,currentVersion:app.getVersion(),supported:app.isPackaged&&process.platform==='win32'&&existsSync(path.join(path.dirname(app.getPath('exe')),'.ark-installed')),
+   notify:state=>{if(window&&!window.isDestroyed())window.webContents.send('ark:update-state',state);},
+   beforeInstall:async()=>{await localApp.store.serial(()=>localApp.store.lockAll());window?.webContents.send('ark:libraries-locked');},
+  });
+  const fromApp=event=>event.sender===window?.webContents&&event.senderFrame?.url.startsWith(origin+'/');
+  for(const [channel,operation] of [['ark:update-get',()=>updates.snapshot()],['ark:update-check',()=>updates.check()],['ark:update-download',()=>updates.download()],['ark:update-install',()=>updates.install()]]){
+   ipcMain.handle(channel,event=>{if(!fromApp(event))throw new Error('请求来源无效');return operation();});
+  }
   await window.loadURL(origin);
+  if(updates.state.status!=='unsupported')setTimeout(()=>{if(window&&!window.isDestroyed())updates.check();},2500).unref();
   window.on('closed',()=>{window=null;});
  }).catch(error=>{require('electron').dialog.showErrorBox('Ark 无法启动',error.message);app.quit();});
  let closing=false;

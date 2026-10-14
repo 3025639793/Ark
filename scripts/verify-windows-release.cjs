@@ -1,0 +1,13 @@
+const fs=require('node:fs');
+const path=require('node:path');
+const crypto=require('node:crypto');
+const {version}=require('../package.json');
+const filename=`Ark-Setup-${version}-x64.exe`;
+const installer=path.join('release',filename);
+const manifest=fs.readFileSync('release/latest.yml','utf8');
+const checksum=crypto.createHash('sha512').update(fs.readFileSync(installer)).digest('base64');
+if(!manifest.includes(filename)||!manifest.includes(checksum)||!manifest.includes(`version: ${version}`))throw Error('Update metadata does not match the Windows installer');
+for(const file of [`${installer}.blockmap`,`release/Ark-${version}-windows-x64.zip`,'release/win-unpacked/resources/app-update.yml'])if(!fs.existsSync(file))throw Error(`Missing release file: ${file}`);
+const config=fs.readFileSync('release/win-unpacked/resources/app-update.yml','utf8');
+if(!config.includes('provider: github')||!config.includes('owner:')||!config.includes('3025639793')||!config.includes('repo: Ark'))throw Error('Packaged update feed is incorrect');
+console.log('Installer, ZIP, blockmap, feed and SHA-512 update metadata verified.');

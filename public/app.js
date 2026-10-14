@@ -1,6 +1,7 @@
 const $ = id => document.getElementById(id);
 const state = { images: [], view: 'all', character: '', tag: '', query: '', series: '', folder: '', deleting: false, sort: 'new', selecting: false, selected: new Set(), detailId: '', uploading: false, libraries: [], libraryId: 'default', settings: {}, randomImage: null };
 let toastTimer;
+let updateState=null;
 function toast(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,4500);}
 const token=document.querySelector('meta[name="ark-token"]').content;
 function libraryPath(id=state.libraryId){return `/api/libraries/${id}`;}
@@ -22,6 +23,7 @@ function filtered(){
 }
 function selectOptions(select,values,selected){select.replaceChildren();select.append(new Option('所有作品',''));for(const value of values)select.append(new Option(value,value));select.value=values.includes(selected)?selected:'';state.series=select.value;}
 function render(){
+ renderUpdate();
  const library=currentLibrary();const locked=library?.encrypted&&!library.unlocked;
  $('library-select').replaceChildren(...state.libraries.map(l=>new Option(`${l.encrypted?(l.unlocked?'◇ ':'◆ '):''}${l.name}`,l.id)));$('library-select').value=state.libraryId;
  $('lock-library').hidden=!library?.encrypted||!library.unlocked;$('locked-library').hidden=!locked;
@@ -153,3 +155,21 @@ $('batch-delete').onclick=async()=>{
  }state.selecting=false;toast(`已删除 ${deleted} 张图片${cleanupFailures?`；${cleanupFailures} 个库文件清理失败，请检查数据目录权限`:''}`);
  }catch(e){toast(`已删除 ${deleted} 张；${e.message}。未删除的图片仍保留选中状态。`);}finally{state.deleting=false;render();}
 };
+function renderUpdate(value=updateState){
+ if(!value)return;updateState=value;$('update-panel').hidden=false;$('app-version').textContent=`v${value.currentVersion}`;$('update-message').textContent=value.message;
+ const busy=state.uploading||state.deleting;
+ $('check-update').disabled=['unsupported','checking','downloading','ready','installing'].includes(value.status);
+ $('download-update').hidden=value.status!=='available';$('download-update').disabled=busy;
+ $('install-update').hidden=value.status!=='ready';$('install-update').disabled=busy;
+ $('update-progress').hidden=value.status!=='downloading';$('update-progress').value=value.progress;
+ $('update-banner').hidden=!['available','downloading','ready','installing'].includes(value.status);
+ $('update-banner-text').textContent=value.status==='downloading'?`正在下载更新 ${Math.round(value.progress)}%`:value.message;
+ $('update-banner-action').textContent=value.status==='ready'?'查看并安装':'查看更新';
+}
+if(window.arkDesktop?.getUpdateState){
+ window.arkDesktop.onUpdateState(renderUpdate);window.arkDesktop.getUpdateState().then(renderUpdate).catch(()=>{});
+ $('update-banner-action').onclick=()=>{renderSettings();$('settings-dialog').showModal();};
+ $('check-update').onclick=()=>window.arkDesktop.checkForUpdates().then(renderUpdate).catch(()=>toast('无法检查更新，请稍后重试。'));
+ $('download-update').onclick=()=>{if(state.uploading||state.deleting){toast('请等导入或删除完成后再下载更新。');return;}window.arkDesktop.downloadUpdate().then(renderUpdate).catch(()=>toast('下载失败，请重试。'));};
+ $('install-update').onclick=()=>{if(state.uploading||state.deleting){toast('请等导入或删除完成后再安装。');return;}if(!confirm('现在重启并安装更新吗？本地图片库会保留，加密库将锁定。'))return;window.arkDesktop.installUpdate().then(renderUpdate).catch(()=>toast('无法安装更新，请重试。'));};
+}

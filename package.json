@@ -1,6 +1,6 @@
 {
   "name": "ark-local-album",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -10,8 +10,8 @@
     "start": "electron .",
     "start:local": "node server.mjs",
     "test": "node --test test/*.test.mjs",
-    "check": "node --check server.mjs && node --check lib/store.mjs && node --check public/app.js && node --check desktop/main.cjs && node --check desktop/preload.cjs",
-    "build:win": "electron-builder --win zip",
+    "check": "node --check server.mjs && node --check lib/store.mjs && node --check public/app.js && node --check desktop/main.cjs && node --check desktop/preload.cjs && node --check desktop/updater.cjs",
+    "build:win": "electron-builder --win",
     "build:linux": "electron-builder --linux dir"
   },
   "description": "Ark — 本地图片相册与加密收藏库",
@@ -37,15 +37,37 @@
     ],
     "win": {
       "target": [
+        "nsis",
         "zip"
       ],
-      "artifactName": "Ark-${version}-windows-${arch}.${ext}"
+      "artifactName": "Ark-${version}-windows-${arch}.${ext}",
+      "verifyUpdateCodeSignature": false
     },
     "extraFiles": [
       {
         "from": "WINDOWS-开始使用.txt",
         "to": "开始使用.txt"
       }
+    ],
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "include": "build/installer.nsh",
+      "artifactName": "Ark-Setup-${version}-${arch}.${ext}"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "3025639793",
+        "repo": "Ark"
+      }
     ]
+  },
+  "dependencies": {
+    "electron-updater": "6.8.9"
   }
 }
