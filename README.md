@@ -15,9 +15,23 @@
 
 这是单用户版本，所有登录设备共用一个图片库。没有自动识别角色、多人账号或图片压缩。图片不会被提交到 GitHub。
 
+## 推荐：Render 网页部署
+
+[打开 Render 部署入口](https://render.com/deploy?repo=https%3A%2F%2Fgithub.com%2F3025639793%2FArk)
+
+1. 注册或登录 Render，按提示授权访问这个 GitHub 仓库。
+2. 使用仓库里的 `render.yaml` 配置创建服务，填写 `ARK_PASSWORD`（至少 12 字符）。
+3. 查看付费服务及磁盘费用后，在 Render 确认部署。
+4. 等待构建成功，打开 Render 给出的 HTTPS 地址，用自己的密码登录。
+5. 电脑和手机打开同一个地址即可查看同一份收藏。
+
+配置使用新加坡区域、Node.js 24、单个付费服务和 10 GB 持久磁盘；密码由你在平台填写，不写进代码。Secure Cookie 已启用。为避免代码推送自动触发线上更新，自动部署默认关闭；以后在 Render 手动部署更新。
+
+按 2026-10-14 查阅的 [Render 定价](https://render.com/pricing)，`0.5c-512mb` 服务为 7 美元/月，磁盘为 0.25 美元/GB/月，10 GB 合计基础费用约 9.50 美元/月；税费、超额流量等另计，以平台最终报价为准。免费服务不能挂载此版本必需的[持久磁盘](https://render.com/docs/disks)。这份部署配置不会自行开通服务或扣费。
+
 ## 本地启动
 
-需要 Node.js 24 或更新版本，无第三方运行依赖。
+需要 Node.js 24，无第三方运行依赖。
 
 ```sh
 cp .env.example .env
