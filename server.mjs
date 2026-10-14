@@ -41,6 +41,18 @@ export async function startLocalApp({dataDir=process.env.ARK_DATA_DIR||join(root
      if(req.method==='DELETE')return json(res,200,await theme.clearImage());
      if(req.method==='GET'){const {bytes,mime}=await theme.image();res.writeHead(200,{...headers,'Content-Type':mime,'Content-Length':bytes.length});return res.end(bytes);}
     }
+    if(path==='/api/import-session'&&req.method==='POST'){const value=await input(req);store.activeImport=value.active===true;if(!store.activeImport&&store.pendingLock){store.pendingLock=false;store.lockAll();}return json(res,200,{ok:true});}
+    const operation=/^\/api\/libraries\/(default|[a-f0-9-]{36})\/(protect|unlock-image|lock-image|unprotect|delete-character)$/.exec(path);
+    if(operation&&req.method==='POST'){
+     const v=await input(req);const id=operation[1];let result;
+     switch(operation[2]){
+      case 'protect':result=await store.protect(id,v.ids,v.password);break;
+      case 'unlock-image':{const now=Date.now();const attempt=attempts.get('images')||{count:0,until:now+60000};if(attempt.until<=now){attempt.count=0;attempt.until=now+60000;}if(attempt.count>=5)fail(429,'请一分钟后再尝试密码。');try{result=await store.unlockImages(id,v.id,v.password,v.scope);attempts.delete('images');}catch(e){if(e.status===401){attempt.count++;attempts.set('images',attempt);}throw e;}break;}
+      case 'lock-image':store.lockImage(v.id);result={ok:true};break;
+      case 'unprotect':result=await store.unprotect(id,v.id);break;
+      case 'delete-character':result=await store.deleteCharacter(id,v.name);break;
+     }return json(res,200,result);
+    }
     if(path==='/api/state'&&req.method==='GET')return json(res,200,store.state());
     if(path==='/api/settings'&&req.method==='PATCH')return json(res,200,await store.settings(await input(req)));
     if(path==='/api/random'&&req.method==='POST')return json(res,200,store.random(await input(req)));
@@ -58,7 +70,7 @@ export async function startLocalApp({dataDir=process.env.ARK_DATA_DIR||join(root
     if(action==='random'&&req.method==='PATCH'){const value=await input(req);return json(res,200,await store.allowRandom(id,value?.allowRandom));}
     if(action==='images'&&!imageId){
      if(req.method==='GET')return json(res,200,store.list(id));
-     if(req.method==='POST'){store.access(id);const bytes=await body(req,25*1024*1024);return json(res,201,await store.import(id,bytes,url.searchParams.get('filename')||'未命名图片',url.searchParams.get('folder')||''));}
+     if(req.method==='POST'){store.access(id);const bytes=await body(req,25*1024*1024);return json(res,201,await store.import(id,bytes,url.searchParams.get('filename')||'未命名图片',url.searchParams.get('folder')||'',url.searchParams.get('inferCharacter')==='true'));}
     }
     if(action==='images'&&imageId){
      if(file&&req.method==='GET'){const {image,bytes}=await store.file(id,imageId);res.writeHead(200,{...headers,'Content-Type':image.mime,'Content-Length':bytes.length,...(url.searchParams.has('download')?{'Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(image.filename).replace(/'/g,'%27')}`}:{})});return res.end(bytes);}

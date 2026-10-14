@@ -26,5 +26,18 @@ test('local-only API protects library operations, supports encrypted imports and
  const rows=await (await request(`/api/libraries/${id}/images`)).json();assert.equal(rows[0].character,'芙莉莲');assert.equal(rows[0].folder,'图片/角色');
  assert.equal((await request(`/api/libraries/${id}/images`,{method:'POST',body:Buffer.alloc(25*1024*1024+1)})).status,413);
  assert.equal((await request(`/api/libraries/${id}/images/batch-delete`,{method:'POST',body:JSON.stringify({ids:[image.id]})})).status,200);assert.equal((await request(file)).status,404);
+ const normal=await (await request('/api/libraries/default/images?filename=hidden.png&folder=collection%2Frole&inferCharacter=true',{method:'POST',body:png})).json();
+ const mixedFile=`/api/libraries/default/images/${normal.id}/file`;
+ assert.equal(normal.character,'role');
+ assert.equal((await request('/api/import-session',{method:'POST',body:'{"active":true}'})).status,200);
+ assert.equal((await request('/api/lock-all',{method:'POST'})).status,409);
+ await request('/api/import-session',{method:'POST',body:'{"active":false}'});
+ assert.equal((await request('/api/libraries/default/protect',{method:'POST',body:JSON.stringify({ids:[normal.id],password:'test-photo-password'})})).status,200);
+ assert.equal((await fetch(app.url+mixedFile,{headers:{cookie}})).status,423);
+ const duplicate=await (await request('/api/libraries/default/images?filename=renamed.png',{method:'POST',body:png})).json();assert.equal(duplicate.duplicate,true);
+ const visible=await (await request('/api/libraries/default/images')).json();assert.equal(visible[0].locked,true);assert.ok(!JSON.stringify(visible).includes('hidden.png'));
+ assert.equal((await request('/api/libraries/default/unlock-image',{method:'POST',body:JSON.stringify({id:normal.id,password:'test-photo-password',scope:'single'})})).status,200);
+ assert.deepEqual(Buffer.from(await (await fetch(app.url+mixedFile,{headers:{cookie}})).arrayBuffer()),png);
+ await request('/api/libraries/default/lock-image',{method:'POST',body:JSON.stringify({id:normal.id})});assert.equal((await fetch(app.url+mixedFile,{headers:{cookie}})).status,423);
  }finally{await app?.close();await rm(dir,{recursive:true,force:true});}
 });

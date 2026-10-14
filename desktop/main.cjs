@@ -16,9 +16,9 @@ else{
   window=new BrowserWindow({width:1280,height:850,minWidth:800,minHeight:600,title:'Ark · 本地相册',backgroundColor:'#f4effb',autoHideMenuBar:true,icon:path.join(__dirname,'../public/mascot.png'),webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,partition:'ark-local-session'}});
   const origin=localApp.url;
   window.webContents.setWindowOpenHandler(()=>({action:'deny'}));
-  window.webContents.on('will-navigate',(event,url)=>{if(new URL(url).origin!==origin)event.preventDefault();});
+  window.webContents.on('will-navigate',(event,url)=>{if(localApp.store.activeImport||new URL(url).origin!==origin)event.preventDefault();});
   ipcMain.handle('ark:open-data-folder',async event=>{if(event.sender!==window?.webContents)return;await shell.openPath(dataDir);});
-  powerMonitor.on('lock-screen',async()=>{await localApp.store.serial(()=>localApp.store.lockAll());window?.webContents.send('ark:libraries-locked');});
+  powerMonitor.on('lock-screen',async()=>{if(localApp.store.activeImport){localApp.store.pendingLock=true;return;}await localApp.store.serial(()=>localApp.store.lockAll());window?.webContents.send('ark:libraries-locked');});
   const updates=new UpdateController({
    updater:autoUpdater,currentVersion:app.getVersion(),supported:app.isPackaged&&process.platform==='win32'&&existsSync(path.join(path.dirname(app.getPath('exe')),'.ark-installed')),
    notify:state=>{if(window&&!window.isDestroyed())window.webContents.send('ark:update-state',state);},
@@ -30,9 +30,10 @@ else{
   }
   await window.loadURL(origin);
   if(updates.state.status!=='unsupported')setTimeout(()=>{if(window&&!window.isDestroyed())updates.check();},2500).unref();
+  window.on('close',event=>{if(localApp.store.activeImport){event.preventDefault();require('electron').dialog.showMessageBox(window,{type:'info',message:'正在导入图片，请等待导入完成后关闭。'});}});
   window.on('closed',()=>{window=null;});
  }).catch(error=>{require('electron').dialog.showErrorBox('Ark 无法启动',error.message);app.quit();});
  let closing=false;
- app.on('before-quit',event=>{if(localApp&&!closing){event.preventDefault();closing=true;localApp.close().finally(()=>app.quit());}});
+ app.on('before-quit',event=>{if(localApp&&!closing){event.preventDefault();if(localApp.store.activeImport)return;closing=true;localApp.close().finally(()=>app.quit());}});
  app.on('window-all-closed',()=>app.quit());
 }

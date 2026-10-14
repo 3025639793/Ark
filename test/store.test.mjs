@@ -35,12 +35,12 @@ test('idle lock wipes the key and removes access to metadata and random candidat
  now+=60001;assert.equal(store.state().libraries.at(-1).unlocked,false);assert.equal(key.every(b=>b===0),true);assert.throws(()=>store.random({libraryId:id}),e=>e.status===404);assert.throws(()=>store.list(id),e=>e.status===423);
 }));
 test('serialized imports preserve all records and metadata validates',async()=>fixture(async dir=>{
- const store=new AlbumStore(dir);await store.init();await Promise.all(Array.from({length:8},(_,n)=>store.serial(()=>store.import('default',png,`${n}.png`))));assert.equal(store.list('default').length,8);
+ const store=new AlbumStore(dir);await store.init();await Promise.all(Array.from({length:8},(_,n)=>store.serial(()=>store.import('default',Buffer.concat([png,Buffer.from(String(n))]),`${n}.png`))));assert.equal(store.list('default').length,8);
  const image=store.list('default')[0];await assert.rejects(store.edit('default',image.id,{source:'javascript:alert(1)'}),e=>e.status===400);await store.edit('default',image.id,{tags:['标签','标签'],favorite:true});assert.deepEqual(store.list('default').find(i=>i.id===image.id).tags,['标签']);
  await assert.rejects(store.import('default',Buffer.from('<svg/>'),'bad.svg'),e=>e.status===415);
 }));
 test('folder classification survives restart; batch deletion is scoped and validates before deleting',async()=>fixture(async dir=>{
- let store=new AlbumStore(dir);await store.init();const first=await store.import('default',png,'first.png','图片/原神/芙宁娜');const second=await store.import('default',png,'second.png','图片/原神/纳西妲');const keep=await store.import('default',png,'keep.png');
+ let store=new AlbumStore(dir);await store.init();const first=await store.import('default',Buffer.concat([png,Buffer.from('first')]),'first.png','图片/原神/芙宁娜');const second=await store.import('default',Buffer.concat([png,Buffer.from('second')]),'second.png','图片/原神/纳西妲');const keep=await store.import('default',png,'keep.png');
  store=new AlbumStore(dir);await store.init();assert.equal(store.list('default').find(i=>i.id===first.id).folder,'图片/原神/芙宁娜');
  await assert.rejects(store.import('default',png,'bad.png','../../images'),e=>e.status===400);assert.equal(store.list('default').length,3);
  const snapshot=await store.create({name:'加密文件夹',encrypted:true,password});const vault=snapshot.libraries.at(-1).id;const secret=await store.import(vault,png,'secret.png','图片/秘密分类/角色');
@@ -49,4 +49,29 @@ test('folder classification survives restart; batch deletion is scoped and valid
  const result=await store.removeBatch('default',[first.id,second.id,first.id]);assert.deepEqual(result.deletedIds,[first.id,second.id]);assert.equal(result.cleanupFailures,0);assert.deepEqual(store.list('default').map(i=>i.id),[keep.id]);
  await assert.rejects(readFile(join(dir,'default','images',first.id)),e=>e.code==='ENOENT');assert.deepEqual((await store.file('default',keep.id)).bytes,png);
  store.lock(vault);await assert.rejects(store.removeBatch(vault,[secret.id]),e=>e.status===423);await store.unlock(vault,password);await store.removeBatch(vault,[secret.id]);assert.equal(store.list(vault).length,0);
+}));
+
+test('content dedup, folder roles, mixed encryption, scopes and deletion preserve images',async()=>fixture(async dir=>{
+ let now=100000;let store=new AlbumStore(dir,{now:()=>now});await store.init();
+ const a=await store.import('default',png,'private-name.png','收藏/角色甲',true);
+ assert.equal(a.character,'角色甲');assert.equal((await store.import('default',png,'renamed.png')).duplicate,true);
+ await store.protect('default',[a.id],password);const stub=store.catalogs.get('default')[0];
+ assert.equal((await readFile(join(dir,'default','images',stub.storage))).includes(png),false);
+ await assert.rejects(readFile(join(dir,'default','images',a.id)),e=>e.code==='ENOENT');
+ assert.equal((await readFile(join(dir,'default','catalog.json'))).includes(Buffer.from('private-name.png')),false);
+ assert.equal(store.list('default')[0].locked,true);await assert.rejects(store.file('default',a.id),e=>e.status===423);
+ assert.equal((await store.import('default',png,'again.png')).duplicate,true);
+ await assert.rejects(store.unlockImages('default',a.id,'bad','single'),e=>e.status===401);
+ await store.unlockImages('default',a.id,password,'single');assert.deepEqual((await store.file('default',a.id)).bytes,png);assert.equal(store.list('default')[0].locked,true);
+ await store.settings({allowEncryptedRandom:true});assert.throws(()=>store.random(),e=>e.status===404);store.lockImage(a.id);await assert.rejects(store.file('default',a.id),e=>e.status===423);
+ await store.unlockImages('default',a.id,password,'5');assert.equal(store.random().id,a.id);const key=store.imageKeys.get(a.id).key;now+=300001;store.state();assert.ok(key.every(b=>b===0));assert.equal(store.list('default')[0].locked,true);
+ await store.deleteCharacter('default','角色甲');assert.equal(store.list('default')[0].character,'');
+ await store.unlockImages('default',a.id,password,'session');now+=36000000;assert.equal(store.list('default')[0].locked,false);
+ await store.edit('default',a.id,{title:'updated'});assert.equal(store.list('default')[0].character,'');
+ await store.unprotect('default',a.id);assert.equal(store.list('default')[0].character,'');assert.deepEqual((await store.file('default',a.id)).bytes,png);
+ await store.protect('default',[a.id],password);store.lockAll();store=new AlbumStore(dir);await store.init();assert.equal(store.list('default')[0].locked,true);
+ await store.removeBatch('default',[a.id]);assert.equal(store.list('default').length,0);
+}));
+test('import protection prevents locking and idle expiry',async()=>fixture(async dir=>{
+ const store=new AlbumStore(dir);await store.init();store.activeImport=true;assert.throws(()=>store.lockAll(),e=>e.status===409);store.activeImport=false;store.lockAll();
 }));
