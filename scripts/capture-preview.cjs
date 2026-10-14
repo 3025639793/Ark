@@ -14,7 +14,8 @@ app.whenReady().then(async()=>{
   await Promise.all([...document.images].map(image=>image.decode().catch(()=>{})));
   const deadline=Date.now()+10000;
   while(document.querySelector('#library-select').options.length===0){if(Date.now()>deadline)throw Error('Album failed to initialize');await new Promise(resolve=>setTimeout(resolve,50));}
-  if(!document.querySelector('.brand-mascot').naturalWidth)throw Error('Mascot did not load');
+  if(!document.querySelector('.brand-mascot').naturalWidth)throw Error('Logo did not load');
+  if(document.querySelectorAll('img[src=\"/mascot.png\"]').length!==1)throw Error('Logo should appear only once inside the album');
   await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
  })()`);
  if(errors.length)throw new Error(errors.join('\n'));

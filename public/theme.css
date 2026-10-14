@@ -27,7 +27,7 @@ button { transition: background .18s, transform .18s, box-shadow .18s; }
   border-right: 1px solid #e0d7ed;
 }
 .brand { gap: 7px; margin-bottom: 34px; font-size: 32px; color: #66517f; }
-.brand-mascot { width: 64px; height: 64px; object-fit: contain; filter: drop-shadow(0 5px 5px #9e88b630); }
+.brand-mascot { width: 40px; height: 40px; object-fit: contain; }
 .brand small { font-size: 10px; letter-spacing: 1px; color: #786d8e; }
 .library-picker { margin-top: -8px; margin-bottom: 22px; }
 .library-picker>label { color: #7a6b91; }
@@ -123,7 +123,17 @@ html[data-easter-eggs='off'] .melusine-guide span { visibility: hidden; }
 html[data-easter-eggs='off'] .melusine-guide:hover img { animation: none; }
 @keyframes little-greeting { 0%,100% { transform: rotate(0); } 30% { transform: rotate(-6deg); } 65% { transform: rotate(5deg); } }
 @media (max-width: 1100px) { .app { grid-template-columns: 215px minmax(0, 1fr); } main { padding: 0 25px; } .breadcrumb { display: none; } .header-actions { width: 100%; } }
-@media (max-width: 700px) { .app { display: block; } .sidebar { padding: 15px 18px; } .brand { margin-bottom: 15px; font-size: 27px; } .brand-mascot { width: 46px; height: 46px; } .village-note { display: none; } .sidebar nav { flex-wrap: wrap; } .nav { width: auto; flex: 1; } .nav.active::after { display: none; } main { padding: 0 16px; } .heading { padding: 22px 20px 27px; margin-top: 15px; min-height: 170px; border-radius: 22px; } .heading h1 { font-size: 27px; } .hero-copy { max-width: calc(100% - 100px); } .heading .eyebrow { font-size: 8px; letter-spacing: 1px; } .melusine-guide { width: 96px; height: 120px; } .melusine-guide img { width: 96px; height: 96px; } .melusine-guide span { font-size: 8px; white-space: normal; text-align: center; } .storage { left: 20px; bottom: 12px; } .header-actions { justify-content: space-between; gap: 5px; } .header-actions button { padding: 9px; font-size: 10px; } .card { border-radius: 14px; } .main-footer { font-size: 8px; } }
+@media (max-width: 700px) { .app { display: block; } .sidebar { padding: 15px 18px; } .brand { margin-bottom: 15px; font-size: 27px; } .brand-mascot { width: 36px; height: 36px; } .village-note { display: none; } .sidebar nav { flex-wrap: wrap; } .nav { width: auto; flex: 1; } .nav.active::after { display: none; } main { padding: 0 16px; } .heading { padding: 22px 20px 27px; margin-top: 15px; min-height: 170px; border-radius: 22px; } .heading h1 { font-size: 27px; } .hero-copy { max-width: calc(100% - 100px); } .heading .eyebrow { font-size: 8px; letter-spacing: 1px; } .melusine-guide { width: 96px; height: 120px; } .melusine-guide img { width: 96px; height: 96px; } .melusine-guide span { font-size: 8px; white-space: normal; text-align: center; } .storage { left: 20px; bottom: 12px; } .header-actions { justify-content: space-between; gap: 5px; } .header-actions button { padding: 9px; font-size: 10px; } .card { border-radius: 14px; } .main-footer { font-size: 8px; } }
 @media (prefers-reduced-motion: reduce) { button, .card { transition: none; } .melusine-guide:hover img { animation: none; } }
 
 .locked-placeholder { background: linear-gradient(135deg,#e8def4,#d9eeea); object-fit: contain; color: #695778; padding: 32px; box-sizing: border-box; }
+
+/* Optional theme art is independent of the single sidebar brand image. */
+html:not([data-theme-art='custom']) .heading { min-height: 125px; }
+html:not([data-theme-art='custom']) .hero-copy { max-width: calc(100% - 170px); }
+html:not([data-theme-art='custom']) .melusine-guide { width: auto; height: auto; max-width: 150px; }
+html:not([data-theme-art='custom']) .melusine-guide span { white-space: normal; line-height: 1.7; text-align: center; }
+@media (max-width: 700px) {
+ html:not([data-theme-art='custom']) .hero-copy { max-width: 100%; }
+ html:not([data-theme-art='custom']) .melusine-guide { display: none; }
+}
