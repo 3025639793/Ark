@@ -123,8 +123,16 @@ test('an existing standalone image can establish the unified password only after
 test('locked previews persist only 64 RGB samples, reject arbitrary payloads and cannot unlock originals',async()=>fixture(async dir=>{
  let store=new AlbumStore(dir);await store.init();const image=await store.import('default',png,'private.png');const preview=Buffer.alloc(192,100).toString('base64');
  await assert.rejects(store.protect('default',[image.id],password,{[image.id]:'data:image/png;base64,full-original'}),e=>e.status===400);
- await store.protect('default',[image.id],password,{[image.id]:preview});assert.equal(store.list('default')[0].hasPreview,true);assert.equal(store.list('default')[0].preview,undefined);assert.equal((store.preview('default',image.id).toString().match(/<rect /g)||[]).length,64);
+ await store.protect('default',[image.id],password,{[image.id]:preview});assert.equal(store.list('default')[0].hasPreview,true);assert.equal(store.list('default')[0].preview,undefined);assert.equal(store.preview('default',image.id).readUInt32BE(16),8);
  await assert.rejects(store.file('default',image.id),e=>e.status===423);await assert.rejects(store.setPreview('default',image.id,preview),e=>e.status===423);
  store.lockAll();store=new AlbumStore(dir);await store.init();assert.equal(store.list('default')[0].hasPreview,true);await assert.rejects(store.file('default',image.id),e=>e.status===423);
  await store.unlockImages('default',image.id,password,'single');await store.setPreview('default',image.id,Buffer.alloc(192,70).toString('base64'));await store.unprotect('default',image.id);assert.equal(store.list('default')[0].hasPreview,undefined);assert.deepEqual((await store.file('default',image.id)).bytes,png);
+}));
+
+test('blurred thumbnails preserve aspect ratio and replace legacy colour samples without changing ciphertext',async()=>fixture(async dir=>{
+ const store=new AlbumStore(dir);await store.init();const image=await store.import('default',png,'private.png');await store.protect('default',[image.id],password,{[image.id]:Buffer.alloc(192,100).toString('base64')});assert.equal(store.list('default')[0].previewVersion,1);
+ const row=store.catalogs.get('default')[0];const ciphertext=await readFile(join(dir,'default','images',row.storage));
+ await store.unlockImages('default',image.id,password,'single');const preview={version:2,width:64,height:48,pixels:Buffer.alloc(64*48*3,80).toString('base64')};
+ await assert.rejects(store.setPreview('default',image.id,{...preview,width:65}),e=>e.status===400);await assert.rejects(store.setPreview('default',image.id,{...preview,pixels:'full-original'}),e=>e.status===400);
+ await store.setPreview('default',image.id,preview);store.lockAll();const visible=store.list('default')[0];assert.equal(visible.previewVersion,2);assert.equal(visible.locked,true);const bytes=store.preview('default',image.id);assert.equal(bytes.readUInt32BE(16),64);assert.equal(bytes.readUInt32BE(20),48);assert.deepEqual(await readFile(join(dir,'default','images',row.storage)),ciphertext);await assert.rejects(store.file('default',image.id),e=>e.status===423);
 }));

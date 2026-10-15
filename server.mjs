@@ -44,7 +44,7 @@ export async function startLocalApp({dataDir=process.env.ARK_DATA_DIR||join(root
     if(path==='/api/import-session'&&req.method==='POST'){const value=await input(req);store.activeImport=value.active===true;if(!store.activeImport&&store.pendingLock){store.pendingLock=false;store.lockAll();}return json(res,200,{ok:true});}
     const operation=/^\/api\/libraries\/(default|[a-f0-9-]{36})\/(protect|unlock-image|lock-image|unprotect|delete-character|preview)$/.exec(path);
     if(operation&&req.method==='POST'){
-     const v=await input(req,operation[2]==='protect'?196608:32768);const id=operation[1];let result;
+     const v=await input(req,operation[2]==='protect'?9*1024*1024:32768);const id=operation[1];let result;
      switch(operation[2]){
       case 'protect':result=await store.protect(id,v.ids,v.password,v.previews);break;
       case 'preview':result=await store.setPreview(id,v.id,v.preview);break;
@@ -80,7 +80,7 @@ export async function startLocalApp({dataDir=process.env.ARK_DATA_DIR||join(root
      if(req.method==='POST'){store.access(id);const bytes=await body(req,25*1024*1024);return json(res,201,await store.import(id,bytes,url.searchParams.get('filename')||'未命名图片',url.searchParams.get('folder')||'',url.searchParams.get('inferCharacter')==='true',url.searchParams.has('character')?url.searchParams.get('character'):undefined,url.searchParams.get('updateDuplicateCharacter')==='true'));}
     }
     if(action==='images'&&imageId){
-     if(file==='/preview'&&req.method==='GET'){const bytes=store.preview(id,imageId);res.writeHead(200,{...headers,'Content-Type':'image/svg+xml','Content-Length':bytes.length});return res.end(bytes);}
+     if(file==='/preview'&&req.method==='GET'){const bytes=store.preview(id,imageId);res.writeHead(200,{...headers,'Content-Type':'image/png','Content-Length':bytes.length});return res.end(bytes);}
      if(file==='/file'&&req.method==='GET'){const {image,bytes}=await store.file(id,imageId);res.writeHead(200,{...headers,'Content-Type':image.mime,'Content-Length':bytes.length,...(url.searchParams.has('download')?{'Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(image.filename).replace(/'/g,'%27')}`}:{})});return res.end(bytes);}
      if(!file&&req.method==='PATCH')return json(res,200,await store.edit(id,imageId,await input(req)));
      if(!file&&req.method==='DELETE'){await store.remove(id,imageId);return json(res,200,{ok:true});}

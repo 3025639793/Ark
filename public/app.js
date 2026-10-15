@@ -15,8 +15,13 @@ async function api(path,options={}){
 const imageLibrary=id=>state.images.find(i=>i.id===id)?.libraryId||(state.detailId===id&&state.detailLibraryId)||state.libraryId;
 const patch=(id,data)=>api(`${libraryPath(imageLibrary(id))}/images/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
 const fileURL=image=>`${libraryPath(image.libraryId)}/images/${image.id}/file`;
-function clearSensitiveViews(){closeOriginalView();if(state.detailId)releaseSingle(state.detailId);state.libraryImages=[];state.encryptedImages=[];state.lockedLibraries=[];state.images=[];state.selected.clear();state.detailId='';$('detail-image').removeAttribute('src');$('edit-form').reset();$('detail').close();stopRandom();state.randomImage=null;$('random-image').removeAttribute('src');$('random-caption').textContent='';$('random-dialog').close();render();}
+function clearSensitiveViews(preserveOrdinary=true){closeOriginalView();if(state.detailId)releaseSingle(state.detailId);const ordinary=image=>preserveOrdinary&&!image.protected&&!image.encrypted&&!state.libraries.find(lib=>lib.id===image.libraryId)?.encrypted;state.libraryImages=state.libraryImages.filter(ordinary);state.encryptedImages=[];state.lockedLibraries=[];state.images=state.images.filter(ordinary);state.selected.clear();state.detailId='';$('detail-image').removeAttribute('src');$('edit-form').reset();$('detail').close();stopRandom();state.randomImage=null;$('random-image').removeAttribute('src');$('random-caption').textContent='';$('random-dialog').close();render();}
 function element(tag,className,text){const e=document.createElement(tag);if(className)e.className=className;if(text!==undefined)e.textContent=text;return e;}
+function setImageSource(image,src){if(src){if(image.getAttribute('src')!==src)image.src=src;}else if(image.hasAttribute('src'))image.removeAttribute('src');}
+function reconcileChildren(parent,nodes){
+ const wanted=new Set(nodes);for(const child of [...parent.children])if(!wanted.has(child)){for(const image of child.querySelectorAll('img'))image.removeAttribute('src');child.remove();}
+ nodes.forEach((node,index)=>{if(parent.children[index]!==node){if(parent.moveBefore&&node.parentNode===parent)parent.moveBefore(node,parent.children[index]||null);else parent.insertBefore(node,parent.children[index]||null);}});
+}
 function groups(field,source=state.images){const result=new Map();for(const image of source){if(!image[field])continue;if(!result.has(image[field]))result.set(image[field],[]);result.get(image[field]).push(image);}return [...result].sort((a,b)=>b[1].length-a[1].length||a[0].localeCompare(b[0],'zh'));}
 function filtered(){
  const query=state.query.toLocaleLowerCase();
@@ -33,10 +38,12 @@ function render(){
 
  const baseImages=encryptedView?state.libraryImages:state.images;$('all-count').textContent=baseImages.length;$('favorite-count').textContent=baseImages.filter(i=>i.favorite).length;$('unfiled-count').textContent=baseImages.filter(i=>!i.character&&!i.series&&!i.folder&&!i.tags.length).length;
  const characters=groups('character',baseImages);$('character-count').textContent=characters.length||'';
- const characterScroll=$('character-list').scrollTop;$('character-list').replaceChildren();
- for(const [name,images] of characters){const button=element('button',`character-link${state.character===name?' active':''}`);const img=element('img','character-avatar');if(!images[0].locked)img.src=fileURL(images[0]);img.alt='';img.loading='lazy';button.title=name;if(state.character===name)button.setAttribute('aria-current','page');button.append(img,element('span','',name),element('small','',images.length));button.onclick=()=>changeView('characters',name);$('character-list').append(button);}
- $('character-list').scrollTop=characterScroll;
- if(!characters.length)$('character-list').append(element('p','nav-label','整理图片后，角色会出现在这里。'));
+ const characterScroll=$('character-list').scrollTop;const oldCharacters=new Map([...$('character-list').children].map(node=>[node.dataset.key,node]));const characterNodes=[];
+ for(const [name,images] of characters){let button=oldCharacters.get(name);if(!button){button=element('button','character-link');button.dataset.key=name;const img=element('img','character-avatar');img.alt='';img.loading='lazy';button.append(img,element('span'),element('small'));}
+  button.className=`character-link${state.character===name?' active':''}`;button.title=name;if(state.character===name)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');const cover=images.find(image=>!image.locked);setImageSource(button.querySelector('img'),cover?fileURL(cover):null);button.querySelector('span').textContent=name;button.querySelector('small').textContent=images.length;button.onclick=()=>changeView('characters',name);characterNodes.push(button);
+ }
+ if(!characters.length){let empty=oldCharacters.get('empty');if(!empty){empty=element('p','nav-label','整理图片后，角色会出现在这里。');empty.dataset.key='empty';}characterNodes.push(empty);}
+ reconcileChildren($('character-list'),characterNodes);$('character-list').scrollTop=characterScroll;
  for(const [field,id] of [['character','characters-options'],['series','series-options']]){$(id).replaceChildren(...groups(field).map(([value])=>new Option(value,value)));}
  selectOptions($('series-filter'),groups('series').map(([n])=>n),state.series);
  const folders=new Set();for(const image of state.images){const parts=(image.folder||'').split('/').filter(Boolean);parts.forEach((_,index)=>folders.add(parts.slice(0,index+1).join('/')));}
@@ -53,16 +60,27 @@ function render(){
  const tags=[...new Set(state.images.flatMap(i=>i.tags))].sort((a,b)=>a.localeCompare(b,'zh'));if(state.tag&&!tags.includes(state.tag))state.tag='';
  $('tag-list').replaceChildren();for(const tag of ['',...tags]){if(!tag&&!tags.length)continue;const b=element('button',`tag${state.tag===tag?' active':''}`,tag||'全部标签');b.onclick=()=>{state.tag=tag;render();};$('tag-list').append(b);}
  $('batch-bar').hidden=!state.selecting||encryptedView;$('select-toggle').textContent=state.selecting?'退出批量':'批量整理';$('selected-count').textContent=`已选 ${state.selected.size} 张`;$('batch-delete').textContent=state.deleting?'正在删除…':'删除所选';$('select-all').disabled=state.deleting;$('cancel-select').disabled=state.deleting;$('batch-edit').disabled=!state.selected.size||state.deleting;$('batch-delete').disabled=!state.selected.size||state.deleting;$('select-toggle').disabled=locked||state.deleting||characterWall||encryptedView;
- renderEncryptedTools();$('gallery').replaceChildren();
+ renderEncryptedTools();renderPreviewStatus();const previousCards=new Map([...$('gallery').children].map(card=>[card.dataset.key,card]));const cards=[];
  if(characterWall){
   const visible=characters.map(([name])=>[name,images.filter(i=>i.character===name)]).filter(([,items])=>items.length);
-  for(const [name,items] of visible){const card=element('article','card role-card');const button=element('button','card-open');const img=element('img','card-image');const cover=items.find(i=>!i.locked&&(i.favorite))||items.find(i=>!i.locked);if(cover)img.src=fileURL(cover);img.alt=name;img.loading='lazy';const info=element('div','card-info');info.append(element('h3','',name),element('p','',`${items.length} 张收藏`));button.append(img,info);button.onclick=()=>changeView('characters',name);card.append(button);$('gallery').append(card);}
+  for(const [name,items] of visible){const key=`role:${state.libraryId}:${name}`;let card=previousCards.get(key);if(!card){card=element('article','card role-card');card.dataset.key=key;const button=element('button','card-open'),img=element('img','card-image'),info=element('div','card-info');img.loading='lazy';info.append(element('h3'),element('p'));button.append(img,info);button.onclick=()=>changeView('characters',name);card.append(button);}
+   const cover=items.find(i=>!i.locked&&i.favorite)||items.find(i=>!i.locked);setImageSource(card.querySelector('img'),cover?fileURL(cover):null);card.querySelector('img').alt=name;card.querySelector('h3').textContent=name;card.querySelector('p').textContent=`${items.length} 张收藏`;cards.push(card);
+  }
  }else for(const image of images){
-  const card=element('article',`card${state.selected.has(image.id)?' selected':''}`);const button=element('button','card-open');const img=element('img','card-image');if(!image.locked)img.src=fileURL(image);else{img.classList.add('locked-placeholder');if(image.hasPreview){img.src=fileURL(image).replace(/file$/,'preview');img.classList.add('locked-preview');}}img.alt=image.locked?'':image.title;img.loading='lazy';const info=element('div','card-info');info.append(element('h3','',image.title||image.filename),element('p','',[encryptedView?image.libraryName:'',image.folder,image.character,image.series,...image.tags.slice(0,2)].filter(Boolean).join(' · ')||'等待整理'));if(image.locked){const cover=element('span','locked-cover');const overlay=element('img','encryption-overlay');overlay.src='/encryption-overlay.png';overlay.alt='';overlay.setAttribute('aria-hidden','true');cover.append(img,overlay,element('span','locked-hint','点击输入密码'));button.append(cover,info);}else button.append(img,info);button.onclick=()=>state.selecting?toggleSelected(image.id):openDetail(image.id);card.append(button);
-  if(state.selecting){const choose=element('button','select-image',state.selected.has(image.id)?'✓':'○');choose.setAttribute('aria-label',`选择 ${image.title}`);choose.setAttribute('aria-pressed',String(state.selected.has(image.id)));choose.onclick=()=>toggleSelected(image.id);card.append(choose);}
-  else if(!image.locked){const favorite=element('button','favorite-button',image.favorite?'♥':'♡');favorite.setAttribute('aria-label',image.favorite?'取消特别喜欢':'标记为特别喜欢');favorite.setAttribute('aria-pressed',String(image.favorite));favorite.onclick=async()=>{favorite.disabled=true;try{const updated=await patch(image.id,{favorite:!image.favorite});replaceImage(updated);render();}catch(e){toast(e.message);favorite.disabled=false;}};card.append(favorite);}
-  $('gallery').append(card);
+  const key=`photo:${image.libraryId}:${image.id}:${image.locked?'locked':'open'}`;let card=previousCards.get(key);
+  if(!card){card=element('article','card');card.dataset.key=key;const button=element('button','card-open'),img=element('img','card-image'),info=element('div','card-info');img.loading='lazy';info.append(element('h3'),element('p'));
+   if(image.locked){const cover=element('span','locked-cover'),overlay=element('img','encryption-overlay');overlay.src='/encryption-overlay.png';overlay.alt='';overlay.setAttribute('aria-hidden','true');cover.append(img,overlay,element('span','locked-hint'));button.append(cover,info);}else button.append(img,info);card.append(button);
+  }
+  card.classList.toggle('selected',state.selected.has(image.id));const button=card.querySelector('.card-open'),img=card.querySelector('.card-image');img.className=`card-image${image.locked?' locked-placeholder':''}${image.locked&&image.hasPreview?' locked-preview':''}`;img.alt=image.locked?'':image.title;
+  setImageSource(img,image.locked?(image.hasPreview?fileURL(image).replace(/file$/,'preview')+`?v=${image.previewVersion||1}`:null):fileURL(image));
+  if(image.locked)card.querySelector('.locked-hint').textContent=image.hasPreview?'点击输入密码':'封面待生成 · 点击解锁';
+  card.querySelector('h3').textContent=image.title||image.filename;card.querySelector('.card-info p').textContent=[encryptedView?image.libraryName:'',image.folder,image.character,image.series,...image.tags.slice(0,2)].filter(Boolean).join(' · ')||'等待整理';button.onclick=()=>state.selecting?toggleSelected(image.id):openDetail(image.id);
+  let choose=card.querySelector('.select-image'),favorite=card.querySelector('.favorite-button');
+  if(state.selecting){favorite?.remove();if(!choose){choose=element('button','select-image');card.append(choose);}choose.textContent=state.selected.has(image.id)?'✓':'○';choose.setAttribute('aria-label',`选择 ${image.title}`);choose.setAttribute('aria-pressed',String(state.selected.has(image.id)));choose.onclick=()=>toggleSelected(image.id);}
+  else{choose?.remove();if(image.locked)favorite?.remove();else{if(!favorite){favorite=element('button','favorite-button');card.append(favorite);}favorite.textContent=image.favorite?'♥':'♡';favorite.setAttribute('aria-label',image.favorite?'取消特别喜欢':'标记为特别喜欢');favorite.setAttribute('aria-pressed',String(image.favorite));favorite.onclick=async()=>{favorite.disabled=true;try{const updated=await patch(image.id,{favorite:!image.favorite});replaceImage(updated);render();}catch(e){toast(e.message);}finally{favorite.disabled=false;}};}}
+  cards.push(card);
  }
+ reconcileChildren($('gallery'),cards);
  const isEmpty=!$('gallery').childElementCount;$('gallery').hidden=isEmpty||locked;$('empty').hidden=!isEmpty||locked;
  const first=!state.images.length&&!encryptedView;const noCharacters=state.view==='characters'&&!characters.length;
  $('empty-title').textContent=encryptedView?'加密内容会集中显示在这里':first?'第一份喜欢，从这里开始':noCharacters?'为图片添加角色，点亮收藏墙':'这里暂时没有图片';
@@ -78,7 +96,7 @@ function renderBreadcrumb(title){
  if(state.character){link('角色收藏墙','characters');separator();}
  const current=element('span','breadcrumb-current',title);current.setAttribute('aria-current','page');container.append(current);
 }
-function changeView(view,character=''){const crossesEncrypted=(state.view==='encrypted')!==(view==='encrypted');if(crossesEncrypted){clearSensitiveViews();}state.query='';$('search').value='';state.view=view;state.character=character;state.tag='';state.series='';state.folder='';state.selecting=false;state.selected.clear();render();if(crossesEncrypted)refresh().catch(e=>toast(e.message));}
+function changeView(view,character=''){const crossesEncrypted=(state.view==='encrypted')!==(view==='encrypted');if(crossesEncrypted){clearSensitiveViews(false);}state.query='';$('search').value='';state.view=view;state.character=character;state.tag='';state.series='';state.folder='';state.selecting=false;state.selected.clear();render();if(crossesEncrypted)refresh().catch(e=>toast(e.message));}
 function toggleSelected(id){if(state.deleting)return;state.selected.has(id)?state.selected.delete(id):state.selected.add(id);render();}
 function replaceImage(image){state.images=state.images.map(i=>i.id===image.id?image:i);}
 async function refresh(){const snapshot=await api('/api/state');applySnapshot(snapshot);const library=currentLibrary();const libraryId=state.libraryId;const view=state.view;const rows=library?.unlocked?await api(`${libraryPath(libraryId)}/images`):[];const collection=await api('/api/encrypted');if(libraryId!==state.libraryId||view!==state.view)return;state.libraryImages=rows;state.encryptedImages=collection.images;state.lockedLibraries=collection.lockedLibraries;state.images=view==='encrypted'?collection.images:rows;render();queueEncryptedPreviews();}
@@ -87,7 +105,7 @@ function applySnapshot(snapshot){if(snapshot.libraries.some(lib=>!lib.unlocked&&
 function openDetail(id,unlockedImage){closeOriginalView();const image=unlockedImage||state.images.find(i=>i.id===id);if(!image)return;if(image.locked){showProtection('unlock',[id],image.libraryId);return;}if(state.detailId&&state.detailId!==id)releaseSingle(state.detailId);state.detailId=id;state.detailLibraryId=image.libraryId;$('protect-image').hidden=!!image.protected||!!state.libraries.find(l=>l.id===image.libraryId)?.encrypted;$('unprotect-image').hidden=!image.protected;for(const input of $('edit-form').elements)input.disabled=false;$('detail-image').src=fileURL(image);$('detail-image').alt=image.title;const form=$('edit-form');for(const field of ['title','character','series','folder','artist','source'])form.elements[field].value=image[field]||'';form.elements.tags.value=image.tags.join('，');form.elements.favorite.checked=image.favorite;$('image-info').textContent=`${image.filename} · ${(image.bytes/1048576).toFixed(2)} MB · ${new Date(image.created_at).toLocaleDateString()}`;$('download').href=fileURL(image)+'?download=1';if(!$('detail').open)$('detail').showModal();}
 function navigateDetail(delta){const images=filtered();const index=images.findIndex(i=>i.id===state.detailId);if(images.length)openDetail(images[(index+delta+images.length)%images.length].id);}
 function splitTags(value){return [...new Set(value.split(/[,，\n]/).map(s=>s.trim()).filter(Boolean))];}
-$('library-select').onchange=async event=>{const libraryId=event.target.value;clearSensitiveViews();state.libraryId=libraryId;changeView('all');try{await refresh();}catch(e){toast(e.message);}};
+$('library-select').onchange=async event=>{const libraryId=event.target.value;clearSensitiveViews(false);state.libraryId=libraryId;changeView('all');try{await refresh();}catch(e){toast(e.message);}};
 $('lock-library').onclick=async()=>{try{applySnapshot(await api(`${libraryPath()}/lock`,{method:'POST'}));clearSensitiveViews();render();}catch(e){toast(e.message);}};
 $('lock-all').onclick=async()=>{try{applySnapshot(await api('/api/lock-all',{method:'POST'}));clearSensitiveViews();await refresh();toast('加密库已全部锁定');}catch(e){toast(e.message);}};
 $('unlock-form').onsubmit=async event=>{event.preventDefault();const button=event.target.querySelector('button');button.disabled=true;$('unlock-error').textContent='';try{await api(`${libraryPath()}/unlock`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:$('unlock-password').value,legacyPassword:$('unlock-legacy-password').value||undefined})});$('unlock-password').value='';$('unlock-legacy-password').value='';await refresh();}catch(e){$('unlock-error').textContent=e.message;}finally{button.disabled=false;}};
@@ -299,23 +317,38 @@ $('original-viewport').addEventListener('pointermove',event=>{if(!originalDrag||
 for(const name of ['pointerup','pointercancel','lostpointercapture'])$('original-viewport').addEventListener(name,()=>{originalDrag=null;$('original-viewport').classList.remove('dragging');});
 window.addEventListener('resize',()=>{if($('original-viewer').open&&originalMode==='fit')originalZoom(1,'fit');});
 
-// Only 64 RGB colour samples are persisted outside encryption; original bytes remain protected.
+// Persist each photo's blurred thumbnail, retaining its composition and aspect ratio.
 async function captureEncryptedPreview(image,loaded){
  if(typeof CanvasRenderingContext2D==='undefined')return null;
+ let timer;
  try{
-  const source=loaded||new Image();if(!loaded){source.src=fileURL(image);await Promise.race([source.decode(),new Promise((_,reject)=>setTimeout(()=>reject(Error('Preview timeout')),5000))]);}
-  const canvas=document.createElement('canvas');canvas.width=8;canvas.height=8;const context=canvas.getContext('2d',{willReadFrequently:true});context.fillStyle='#6d6078';context.fillRect(0,0,8,8);context.drawImage(source,0,0,8,8);const rgba=context.getImageData(0,0,8,8).data;let rgb='';for(let n=0;n<rgba.length;n+=4)rgb+=String.fromCharCode(rgba[n],rgba[n+1],rgba[n+2]);return btoa(rgb);
- }catch{return null;}
+  const source=loaded||new Image();if(!loaded){source.src=fileURL(image);await Promise.race([source.decode(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Preview timeout')),10000);})]);}
+  const ratio=64/Math.max(source.naturalWidth,source.naturalHeight);const width=Math.max(1,Math.round(source.naturalWidth*ratio)),height=Math.max(1,Math.round(source.naturalHeight*ratio));
+  const scaled=document.createElement('canvas');scaled.width=width;scaled.height=height;const raw=scaled.getContext('2d');raw.fillStyle='#6d6078';raw.fillRect(0,0,width,height);raw.drawImage(source,0,0,width,height);
+  // Extend the edges before blurring so the thumbnail never gains a uniform border.
+  const pad=12,padded=document.createElement('canvas');padded.width=width+pad*2;padded.height=height+pad*2;const edges=padded.getContext('2d');
+  edges.drawImage(scaled,0,0,1,height,0,pad,pad,height);edges.drawImage(scaled,width-1,0,1,height,width+pad,pad,pad,height);edges.drawImage(scaled,0,0,width,1,pad,0,width,pad);edges.drawImage(scaled,0,height-1,width,1,pad,height+pad,width,pad);
+  for(const [x,y] of [[0,0],[width-1,0],[0,height-1],[width-1,height-1]])edges.drawImage(scaled,x,y,1,1,x?width+pad:0,y?height+pad:0,pad,pad);
+  edges.drawImage(scaled,pad,pad);
+  const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;const context=canvas.getContext('2d',{willReadFrequently:true});context.filter='blur(3px)';context.drawImage(padded,-pad,-pad);
+  const rgba=context.getImageData(0,0,width,height).data;let rgb='';for(let n=0;n<rgba.length;n+=4)rgb+=String.fromCharCode(rgba[n],rgba[n+1],rgba[n+2]);return {version:2,width,height,pixels:btoa(rgb)};
+ }catch{return null;}finally{clearTimeout(timer);}
 }
-const pendingPreviews=new Set();
+const pendingPreviews=new Set(),previewErrors=new Set();
 async function saveEncryptedPreview(image,loaded){
- if(!image?.protected||image.hasPreview||pendingPreviews.has(image.id))return;
- pendingPreviews.add(image.id);const revision=state.lockRevision;
- try{const preview=await captureEncryptedPreview(image,loaded);if(!preview||revision!==state.lockRevision)return;await postOperation('preview',{id:image.id,preview},image.libraryId);for(const source of [state.images,state.libraryImages,state.encryptedImages]){const row=source.find(row=>row.id===image.id);if(row)row.hasPreview=true;}if(revision===state.lockRevision&&state.images.some(row=>row.id===image.id&&row.locked))render();}catch{}finally{pendingPreviews.delete(image.id);}
+ if(!image?.protected||image.previewVersion===2||pendingPreviews.has(image.id))return;
+ pendingPreviews.add(image.id);renderPreviewStatus();const revision=state.lockRevision;
+ try{const preview=await captureEncryptedPreview(image,loaded);if(revision!==state.lockRevision)return;if(!preview){previewErrors.add(image.id);return;}await postOperation('preview',{id:image.id,preview},image.libraryId);previewErrors.delete(image.id);for(const source of [state.images,state.libraryImages,state.encryptedImages]){const row=source.find(row=>row.id===image.id);if(row){row.hasPreview=true;row.previewVersion=2;}}if(revision===state.lockRevision&&state.images.some(row=>row.id===image.id&&row.locked))render();}catch{if(revision===state.lockRevision)previewErrors.add(image.id);}finally{pendingPreviews.delete(image.id);renderPreviewStatus();}
 }
 let previewQueueRunning=false;
 async function queueEncryptedPreviews(){
  if(previewQueueRunning||typeof CanvasRenderingContext2D==='undefined')return;previewQueueRunning=true;const revision=state.lockRevision;
- try{for(const image of state.encryptedImages.filter(image=>image.protected&&!image.locked&&!image.hasPreview)){if(revision!==state.lockRevision)break;await saveEncryptedPreview(image);}}finally{previewQueueRunning=false;}
+ try{for(const image of state.encryptedImages.filter(image=>image.protected&&!image.locked&&image.previewVersion!==2)){if(revision!==state.lockRevision)break;await saveEncryptedPreview(image);}}finally{previewQueueRunning=false;}
 }
 $('detail-image').addEventListener('load',()=>{const image=state.encryptedImages.find(image=>image.id===state.detailId)||state.images.find(image=>image.id===state.detailId);saveEncryptedPreview(image,$('detail-image'));});
+
+function renderPreviewStatus(){
+ const status=$('encrypted-preview-status');if(!status)return;const needing=state.encryptedImages.filter(image=>image.protected&&image.previewVersion!==2);const unlocked=needing.some(image=>!image.locked);
+ const failed=needing.filter(image=>previewErrors.has(image.id)).length;if(failed&&!pendingPreviews.size){status.textContent=`${failed} 张封面生成失败，请重新解锁后重试；其余待更新 ${needing.length-failed} 张。`;return;}
+ status.textContent=needing.length?(pendingPreviews.size||unlocked?`正在按原图生成模糊封面，还剩 ${needing.length} 张；完成后可锁定全部。`:`${needing.length} 张模糊封面待生成或更新。点击「解锁全部」输入密码，完成后再锁定。`):'模糊封面已就绪，每张封面来自对应图片。';
+}

@@ -45,6 +45,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $assets = @(Get-ChildItem release -File | Where-Object { $_.Name -match '^Ark-.*\.(exe|zip|blockmap|sha256)$' -or $_.Name -in 'latest.yml', 'preview.png' } | ForEach-Object { $_.FullName })
+          $assets = @(Get-ChildItem release -File | Where-Object { $_.Name -match '^Ark-.*\.(exe|zip|blockmap|sha256)$' -or $_.Name -in 'latest.yml', 'preview.png', 'encrypted-covers.png' } | ForEach-Object { $_.FullName })
           gh release create $env:GITHUB_REF_NAME @assets --repo $env:GITHUB_REPOSITORY --verify-tag --title "Ark $env:GITHUB_REF_NAME · Windows 本地相册" --notes-file .github/release-notes.md
           if ($LASTEXITCODE -ne 0) { throw 'Release publication failed' }

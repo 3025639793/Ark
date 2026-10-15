@@ -34,7 +34,7 @@ test('local-only API protects library operations, supports encrypted imports and
  assert.equal((await request('/api/lock-all',{method:'POST'})).status,409);
  await request('/api/import-session',{method:'POST',body:'{"active":false}'});
  assert.equal((await request('/api/libraries/default/protect',{method:'POST',body:JSON.stringify({ids:[normal.id],password:'test-password',previews:{[normal.id]:Buffer.alloc(192,120).toString('base64')}})})).status,200);
- const previewPath=mixedFile.replace(/file$/,'preview');assert.equal((await fetch(app.url+previewPath)).status,403);const previewResponse=await fetch(app.url+previewPath,{headers:{cookie}});assert.equal(previewResponse.status,200);assert.match(previewResponse.headers.get('content-type'),/svg/);assert.equal((await previewResponse.text()).match(/<rect /g).length,64);
+ const previewPath=mixedFile.replace(/file$/,'preview');assert.equal((await fetch(app.url+previewPath)).status,403);const previewResponse=await fetch(app.url+previewPath,{headers:{cookie}});assert.equal(previewResponse.status,200);assert.match(previewResponse.headers.get('content-type'),/png/);const previewBytes=Buffer.from(await previewResponse.arrayBuffer());assert.equal(previewBytes.readUInt32BE(16),8);assert.equal(previewBytes.readUInt32BE(20),8);
  assert.equal((await fetch(app.url+mixedFile,{headers:{cookie}})).status,423);
  const duplicate=await (await request('/api/libraries/default/images?filename=renamed.png',{method:'POST',body:png})).json();assert.equal(duplicate.duplicate,true);
  const visible=await (await request('/api/libraries/default/images')).json();assert.equal(visible[0].locked,true);assert.ok(!JSON.stringify(visible).includes('hidden.png'));
