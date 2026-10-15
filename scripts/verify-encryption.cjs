@@ -42,6 +42,8 @@ module.exports.verifyEncryption=async(window,server)=>{
   if(samples[0].pixels.join(',')===samples[1].pixels.join(','))throw Error('Different images must produce different blurred covers');
   for(const sample of samples){const colours=new Set();for(let n=0;n<sample.pixels.length;n+=4)colours.add(sample.pixels.slice(n,n+3).join(','));if(colours.size<10)throw Error('Blurred thumbnail must retain original composition and soft colour transitions');}
   const stable=previews.slice();render();if(stable.some(image=>!image.isConnected))throw Error('Locked preview refresh must preserve image elements');
+  await api('/api/unlock-matching',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password,scope:'session'})});const single=await postOperation('unlock-image',{id,password,scope:'single'},'default');await refresh();openDetail(id,single.image);navigateDetail(1);const nextId=state.detailId;
+  await new Promise(resolve=>setTimeout(resolve,250));if(nextId===id||!document.getElementById('detail').open||state.detailId!==nextId)throw Error('Releasing a previous single-image grant must not close the newly opened detail');document.getElementById('detail').close();await api('/api/lock-all',{method:'POST'});await refresh();
   const cards=[...document.querySelectorAll('#gallery .card')],frames=cards.map(card=>card.querySelector('.photo-media'));const heights=frames.map(frame=>frame.getBoundingClientRect().height);
   const nativeDecode=HTMLImageElement.prototype.decode;let releaseDecode;let gate=new Promise(resolve=>{releaseDecode=resolve;});
   HTMLImageElement.prototype.decode=function(){const decoded=nativeDecode.call(this);return this.matches('#gallery .card-image')?Promise.all([decoded,gate]).then(()=>{}):decoded;};

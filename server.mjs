@@ -13,7 +13,7 @@ const headers={
 function json(res,status,value){res.writeHead(status,{...headers,'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(value));}
 async function body(req,limit=32768){if(Number(req.headers['content-length'])>limit)fail(413,'导入文件太大，单张最多 25 MB。');let size=0;const chunks=[];for await(const chunk of req){size+=chunk.length;if(size>limit)fail(413,'请求内容超出限制。');chunks.push(chunk);}return Buffer.concat(chunks);}
 async function input(req,limit){try{const value=JSON.parse((await body(req,limit)).toString());if(!value||typeof value!=='object'||Array.isArray(value))fail(400,'请求格式有误。');return value;}catch(e){if(e.status)throw e;fail(400,'请求格式有误。');}}
-function equal(value,token){return typeof value==='string'&&value.length===token.length&&timingSafeEqual(Buffer.from(value),Buffer.from(token));}
+function equal(value,token){return typeof value==='string'&&/^[a-f0-9]{64}$/.test(value)&&value.length===token.length&&timingSafeEqual(Buffer.from(value),Buffer.from(token));}
 export async function startLocalApp({dataDir=process.env.ARK_DATA_DIR||join(root,'data'),port=Number(process.env.PORT||0)}={}){
  const store=new AlbumStore(resolve(dataDir));await store.init();const theme=new ThemeStore(resolve(dataDir));await theme.init();const token=randomBytes(32).toString('hex');
  const assets=new Map(await Promise.all(['index.html','folders.js','app.js','style.css','theme.css','theme.js','mascot.svg','mascot.png','encryption-overlay.png'].map(async file=>['/'+file,await readFile(join(root,'public',file)).catch(error=>{if(file==='mascot.png'&&error.code==='ENOENT')return readFile(join(root,'public','mascot.svg'));throw error;})])));

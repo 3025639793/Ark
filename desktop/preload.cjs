@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('arkDesktop',{
  downloadUpdate:()=>ipcRenderer.invoke('ark:update-download'),
  installUpdate:()=>ipcRenderer.invoke('ark:update-install'),
  onUpdateState:callback=>{ipcRenderer.on('ark:update-state',(_event,state)=>callback(state));},
+ backupData:()=>ipcRenderer.invoke('ark:backup'),
  openDataFolder:()=>ipcRenderer.invoke('ark:open-data-folder'),
  onLibrariesLocked:callback=>{ipcRenderer.on('ark:libraries-locked',()=>callback());},
 });

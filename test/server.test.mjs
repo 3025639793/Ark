@@ -11,7 +11,7 @@ test('local-only API protects library operations, supports encrypted imports and
  try{
  app=await startLocalApp({dataDir:dir});const root=await fetch(app.url);const token=/<meta name="ark-token" content="([a-f0-9]{64})">/.exec(await root.text())[1];const cookie=root.headers.get('set-cookie').split(';')[0];
  const request=(path,options={})=>fetch(app.url+path,{...options,headers:{'X-Ark-Token':token,...options.headers}});
- assert.equal((await fetch(app.url+'/api/state')).status,403);
+ assert.equal((await fetch(app.url+'/api/state')).status,403);assert.equal((await fetch(app.url+'/api/state',{headers:{'X-Ark-Token':'é'.repeat(64)}})).status,403);
  const wrongHost=await new Promise((resolve,reject)=>{const req=http.get(app.url+'/api/state',{headers:{Host:'attacker.example','X-Ark-Token':token}},res=>{res.resume();resolve(res.statusCode);});req.on('error',reject);});assert.equal(wrongHost,403);
  assert.equal((await request('/api/libraries',{method:'POST',headers:{Origin:'https://other.example'},body:'{}'})).status,403);
  const themeUpload=await request('/api/theme/image',{method:'POST',body:png});assert.equal(themeUpload.status,200);assert.equal((await fetch(app.url+'/api/theme/image')).status,403);assert.deepEqual(Buffer.from(await (await fetch(app.url+'/api/theme/image',{headers:{cookie}})).arrayBuffer()),png);

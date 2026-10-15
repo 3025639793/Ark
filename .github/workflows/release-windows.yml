@@ -2,6 +2,8 @@ name: Build and release Windows album
 
 on:
   push:
+    branches:
+      - 'validation/**'
     tags:
       - 'v*'
 
@@ -18,6 +20,7 @@ jobs:
           node-version: '24'
           cache: npm
       - name: Verify version tag
+        if: startsWith(github.ref, 'refs/tags/')
         shell: pwsh
         run: |
           $version = (Get-Content package.json | ConvertFrom-Json).version
@@ -31,6 +34,16 @@ jobs:
         run: |
           node node_modules/electron/install.js
           npx electron scripts/capture-preview.cjs
+      - name: Verify installation and upgrade from previous stable version
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $previous = Join-Path $env:RUNNER_TEMP 'ark-previous-installer'
+          gh release download v0.10.0 --repo $env:GITHUB_REPOSITORY --pattern 'Ark-Setup-0.10.0-x64.exe' --dir $previous
+          if ($LASTEXITCODE -ne 0) { throw 'Previous installer download failed' }
+          node scripts/verify-installation.cjs (Join-Path $previous 'Ark-Setup-0.10.0-x64.exe')
+          if ($LASTEXITCODE -ne 0) { throw 'Installation or upgrade verification failed' }
       - name: Add checksum
         shell: pwsh
         run: |
@@ -41,6 +54,7 @@ jobs:
             [System.IO.File]::WriteAllText("$($archive.FullName).sha256", "$hash  $($archive.Name)`n")
           }
       - name: Publish download
+        if: startsWith(github.ref, 'refs/tags/')
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

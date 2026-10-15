@@ -229,3 +229,15 @@ html:not([data-theme-art='custom']) .melusine-guide span { white-space: normal; 
 dialog[open] { animation: dialog-arrive .16s ease-out; }
 @keyframes dialog-arrive { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) { .photo-media .card-image, .photo-media .encryption-overlay, .photo-media .locked-hint { transition: none; } dialog[open] { animation: none; } }
+
+.gallery-pagination { display: flex; justify-content: center; align-items: center; gap: 16px; padding: 12px 0 4px; }
+.backup-settings { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 18px; }
+.backup-settings h3 { font-size: 14px; margin: 0 0 8px; }
+.backup-settings p { line-height: 1.7; }
+#settings-dialog { max-height: 88vh; overflow-y: auto; }
+.tools { flex-wrap: wrap; }
+.tools .search-box { min-width: 160px; }
+#detail button:disabled { cursor: default; }
+
+#tag-list:empty { min-height: 20px; padding: 10px 0; }
+#settings-dialog .detail-top { position: sticky; top: -26px; z-index: 3; background: var(--panel); padding: 12px 0; }

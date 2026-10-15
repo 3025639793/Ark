@@ -22,6 +22,7 @@ app.whenReady().then(async()=>{
  await require('./verify-folder-preview.cjs').verifyFolderPreview(window);
  await require('./verify-encryption.cjs').verifyEncryption(window,server);
  await require('./verify-original.cjs').verifyOriginal(window,server);
+ await require('./verify-gallery.cjs').verifyGallery(window,server);
  if(errors.length)throw new Error(errors.join('\n'));
  const screenshot=await window.webContents.capturePage();await fs.mkdir('release',{recursive:true});await fs.writeFile('release/preview.png',screenshot.toPNG());
  window.destroy();await server.close();await fs.rm(dir,{recursive:true,force:true});console.log('Native Electron theme initialized; preview captured.');app.exit(0);

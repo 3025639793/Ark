@@ -145,3 +145,9 @@ test('normal collections hide locked photos and restore the same classifications
  await store.unlockImages('default',hidden.id,password,'session');assert.equal(visible().length,2);store.lockAll();assert.deepEqual(visible().map(image=>image.id),[plain.id]);
  await store.unlockImages('default',hidden.id,password,'session');await store.unprotect('default',hidden.id);store.lockAll();assert.equal(visible().length,2);assert.equal(visible().find(image=>image.id===hidden.id).folder,'作品/角色/壁纸');
 }));
+
+test('batch encryption commits its catalogue once and rolls back new files if saving fails',async()=>fixture(async dir=>{
+ const store=new AlbumStore(dir);await store.init();await store.setupMaster(password);const images=[];for(let n=0;n<12;n++)images.push(await store.import('default',Buffer.concat([png,Buffer.from(String(n))]),`batch-${n}.png`));const before=await readFile(join(dir,'default','catalog.json'));
+ const originalSave=store.saveCatalog.bind(store);store.saveCatalog=async()=>{throw Error('simulated disk error');};await assert.rejects(store.protect('default',images.map(image=>image.id)),/simulated disk error/);assert.deepEqual(await readFile(join(dir,'default','catalog.json')),before);for(const image of images)assert.ok((await store.file('default',image.id)).bytes.length);const {readdir}=await import('node:fs/promises');assert.equal((await readdir(join(dir,'default','images'))).length,12);
+ let writes=0;store.saveCatalog=async(...args)=>{writes++;return originalSave(...args);};await store.protect('default',images.map(image=>image.id));assert.equal(writes,1);assert.equal(store.list('default',{includeLocked:false}).length,0);await store.unlockMatching(password,'session');assert.equal(store.list('default',{includeLocked:false}).length,12);
+}));
