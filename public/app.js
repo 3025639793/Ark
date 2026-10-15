@@ -1,12 +1,15 @@
 const $ = id => document.getElementById(id);
 const state = { images: [], view: 'all', character: '', tag: '', query: '', series: '', folder: '', deleting: false, sort: 'new', selecting: false, selected: new Set(), detailId: '', detailLibraryId:'', libraryImages:[], encryptedImages:[], lockedLibraries:[], masterPassword:{}, uploading: false, libraries: [], libraryId: 'default', settings: {}, randomImage: null };
 let toastTimer;
+let refreshSequence=0,refreshInFlight=0;
+const latestPreviews=new Map();
 let updateState=null;
 function toast(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,4500);}
 const token=document.querySelector('meta[name="ark-token"]').content;
 function libraryPath(id=state.libraryId){return `/api/libraries/${id}`;}
 function currentLibrary(){return state.libraries.find(l=>l.id===state.libraryId);}
 async function api(path,options={}){
+ if(options.method&&options.method!=='GET'&&!path.endsWith('/preview')&&!path.endsWith('/lock-image'))refreshSequence++;
  const response=await fetch(path,{...options,headers:{'X-Ark-Token':token,...options.headers}});
  const value=await response.json();
  if(!response.ok){if(response.status===423){clearSensitiveViews();setTimeout(()=>refresh().catch(()=>{}),0);}throw new Error(value.error||'操作失败，请重试。');}
@@ -15,12 +18,24 @@ async function api(path,options={}){
 const imageLibrary=id=>state.images.find(i=>i.id===id)?.libraryId||(state.detailId===id&&state.detailLibraryId)||state.libraryId;
 const patch=(id,data)=>api(`${libraryPath(imageLibrary(id))}/images/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
 const fileURL=image=>`${libraryPath(image.libraryId)}/images/${image.id}/file`;
-function clearSensitiveViews(preserveOrdinary=true){closeOriginalView();if(state.detailId)releaseSingle(state.detailId);const ordinary=image=>preserveOrdinary&&!image.protected&&!image.encrypted&&!state.libraries.find(lib=>lib.id===image.libraryId)?.encrypted;state.libraryImages=state.libraryImages.filter(ordinary);state.encryptedImages=[];state.lockedLibraries=[];state.images=state.images.filter(ordinary);state.selected.clear();state.detailId='';$('detail-image').removeAttribute('src');$('edit-form').reset();$('detail').close();stopRandom();state.randomImage=null;$('random-image').removeAttribute('src');$('random-caption').textContent='';$('random-dialog').close();render();}
+function clearSensitiveViews(preserveOrdinary=true){
+ closeOriginalView();if(state.detailId)releaseSingle(state.detailId);
+ const sanitise=image=>{if(!preserveOrdinary)return null;const lib=state.libraries.find(lib=>lib.id===image.libraryId);if(lib?.encrypted)return null;if(!image.protected&&!image.encrypted)return image;if(!image.protected)return null;
+  return {id:image.id,libraryId:image.libraryId,libraryName:image.libraryName,protected:true,encrypted:true,locked:true,hasPreview:image.hasPreview,previewVersion:image.previewVersion,previewWidth:image.previewWidth,previewHeight:image.previewHeight,legacy:image.legacy,title:'已加密 · 输入密码查看',filename:'加密图片',character:image.character,series:image.series,folder:image.folder,tags:[],favorite:false,bytes:image.bytes,created_at:image.created_at};};
+ for(const key of ['libraryImages','encryptedImages','images'])state[key]=state[key].map(sanitise).filter(Boolean);state.lockedLibraries=[];state.selected.clear();state.detailId='';$('detail-image').removeAttribute('src');$('edit-form').reset();$('detail').close();stopRandom();state.randomImage=null;$('random-image').removeAttribute('src');$('random-caption').textContent='';$('random-dialog').close();render();
+}
 function element(tag,className,text){const e=document.createElement(tag);if(className)e.className=className;if(text!==undefined)e.textContent=text;return e;}
 function setImageSource(image,src){if(src){if(image.getAttribute('src')!==src)image.src=src;}else if(image.hasAttribute('src'))image.removeAttribute('src');}
 function reconcileChildren(parent,nodes){
  const wanted=new Set(nodes);for(const child of [...parent.children])if(!wanted.has(child)){for(const image of child.querySelectorAll('img'))image.removeAttribute('src');child.remove();}
  nodes.forEach((node,index)=>{if(parent.children[index]!==node){if(parent.moveBefore&&node.parentNode===parent)parent.moveBefore(node,parent.children[index]||null);else parent.insertBefore(node,parent.children[index]||null);}});
+}
+async function revealPhoto(frame,image){
+ const src=image.getAttribute('src');if(!src)return;
+ try{await image.decode?.();}catch{return;}
+ if(!frame.isConnected||frame.dataset.locked==='true'||image.getAttribute('src')!==src||!image.naturalWidth)return;
+ if(!frame.dataset.ratio){frame.style.aspectRatio=`${image.naturalWidth} / ${image.naturalHeight}`;frame.dataset.ratio='loaded';}
+ frame.classList.add('media-ready');
 }
 function groups(field,source=state.images){const result=new Map();for(const image of source){if(!image[field])continue;if(!result.has(image[field]))result.set(image[field],[]);result.get(image[field]).push(image);}return [...result].sort((a,b)=>b[1].length-a[1].length||a[0].localeCompare(b[0],'zh'));}
 function filtered(){
@@ -67,13 +82,18 @@ function render(){
    const cover=items.find(i=>!i.locked&&i.favorite)||items.find(i=>!i.locked);setImageSource(card.querySelector('img'),cover?fileURL(cover):null);card.querySelector('img').alt=name;card.querySelector('h3').textContent=name;card.querySelector('p').textContent=`${items.length} 张收藏`;cards.push(card);
   }
  }else for(const image of images){
-  const key=`photo:${image.libraryId}:${image.id}:${image.locked?'locked':'open'}`;let card=previousCards.get(key);
-  if(!card){card=element('article','card');card.dataset.key=key;const button=element('button','card-open'),img=element('img','card-image'),info=element('div','card-info');img.loading='lazy';info.append(element('h3'),element('p'));
-   if(image.locked){const cover=element('span','locked-cover'),overlay=element('img','encryption-overlay');overlay.src='/encryption-overlay.png';overlay.alt='';overlay.setAttribute('aria-hidden','true');cover.append(img,overlay,element('span','locked-hint'));button.append(cover,info);}else button.append(img,info);card.append(button);
+  const key=`photo:${image.libraryId}:${image.id}`;let card=previousCards.get(key);
+  if(!card){card=element('article','card');card.dataset.key=key;const button=element('button','card-open'),frame=element('span','photo-media'),img=element('img','card-image'),preview=element('img','card-preview'),info=element('div','card-info'),overlay=element('img','encryption-overlay');
+   img.loading='lazy';img.decoding='async';preview.loading='lazy';preview.alt='';overlay.src='/encryption-overlay.png';overlay.alt='';overlay.setAttribute('aria-hidden','true');frame.append(img,preview,overlay,element('span','locked-hint'));info.append(element('h3'),element('p'));button.append(frame,info);card.append(button);
+   img.onload=()=>revealPhoto(frame,img);img.onerror=()=>{frame.classList.remove('media-ready');frame.querySelector('.locked-hint').textContent=frame.dataset.locked==='true'?'点击输入密码':'图片暂时无法加载，点击重试';};
   }
-  card.classList.toggle('selected',state.selected.has(image.id));const button=card.querySelector('.card-open'),img=card.querySelector('.card-image');img.className=`card-image${image.locked?' locked-placeholder':''}${image.locked&&image.hasPreview?' locked-preview':''}`;img.alt=image.locked?'':image.title;
-  setImageSource(img,image.locked?(image.hasPreview?fileURL(image).replace(/file$/,'preview')+`?v=${image.previewVersion||1}`:null):fileURL(image));
-  if(image.locked)card.querySelector('.locked-hint').textContent=image.hasPreview?'点击输入密码':'封面待生成 · 点击解锁';
+  card.classList.toggle('selected',state.selected.has(image.id));const button=card.querySelector('.card-open'),img=card.querySelector('.card-image'),frame=card.querySelector('.photo-media'),preview=card.querySelector('.card-preview');
+  frame.dataset.locked=String(!!image.locked);frame.classList.toggle('locked-cover',!!image.locked);img.alt=image.locked?'':image.title;
+  if(image.previewWidth&&image.previewHeight){frame.style.aspectRatio=`${image.previewWidth} / ${image.previewHeight}`;frame.dataset.ratio='known';}
+  preview.className=`card-preview${image.locked&&image.hasPreview?' locked-preview':''}`;setImageSource(preview,image.hasPreview?fileURL(image).replace(/file$/,'preview')+`?v=${image.previewVersion||1}`:null);
+  const src=image.locked?null:fileURL(image);if(image.locked||img.getAttribute('src')!==src)frame.classList.remove('media-ready');setImageSource(img,src);
+  frame.querySelector('.encryption-overlay').hidden=!image.locked&&!image.hasPreview;
+  frame.querySelector('.locked-hint').textContent=image.locked?(image.hasPreview?'点击输入密码':'封面待生成 · 点击解锁'):'正在加载图片…';
   card.querySelector('h3').textContent=image.title||image.filename;card.querySelector('.card-info p').textContent=[encryptedView?image.libraryName:'',image.folder,image.character,image.series,...image.tags.slice(0,2)].filter(Boolean).join(' · ')||'等待整理';button.onclick=()=>state.selecting?toggleSelected(image.id):openDetail(image.id);
   let choose=card.querySelector('.select-image'),favorite=card.querySelector('.favorite-button');
   if(state.selecting){favorite?.remove();if(!choose){choose=element('button','select-image');card.append(choose);}choose.textContent=state.selected.has(image.id)?'✓':'○';choose.setAttribute('aria-label',`选择 ${image.title}`);choose.setAttribute('aria-pressed',String(state.selected.has(image.id)));choose.onclick=()=>toggleSelected(image.id);}
@@ -99,10 +119,19 @@ function renderBreadcrumb(title){
 function changeView(view,character=''){const crossesEncrypted=(state.view==='encrypted')!==(view==='encrypted');if(crossesEncrypted){clearSensitiveViews(false);}state.query='';$('search').value='';state.view=view;state.character=character;state.tag='';state.series='';state.folder='';state.selecting=false;state.selected.clear();render();if(crossesEncrypted)refresh().catch(e=>toast(e.message));}
 function toggleSelected(id){if(state.deleting)return;state.selected.has(id)?state.selected.delete(id):state.selected.add(id);render();}
 function replaceImage(image){state.images=state.images.map(i=>i.id===image.id?image:i);}
-async function refresh(){const snapshot=await api('/api/state');applySnapshot(snapshot);const library=currentLibrary();const libraryId=state.libraryId;const view=state.view;const rows=library?.unlocked?await api(`${libraryPath(libraryId)}/images`):[];const collection=await api('/api/encrypted');if(libraryId!==state.libraryId||view!==state.view)return;state.libraryImages=rows;state.encryptedImages=collection.images;state.lockedLibraries=collection.lockedLibraries;state.images=view==='encrypted'?collection.images:rows;render();queueEncryptedPreviews();}
+async function refresh({poll=false}={}){
+ if(poll&&refreshInFlight)return;refreshInFlight++;try{
+ const request=++refreshSequence,libraryId=state.libraryId,view=state.view;const current=()=>request===refreshSequence&&libraryId===state.libraryId&&view===state.view;
+ const snapshot=await api('/api/state');if(!current())return;
+ const unchanged=JSON.stringify(snapshot.libraries)===JSON.stringify(state.libraries)&&snapshot.lockRevision===state.lockRevision&&JSON.stringify(snapshot.masterPassword||{})===JSON.stringify(state.masterPassword);
+ applySnapshot(snapshot);if(poll&&unchanged&&state.images.length)return;
+ const [rows,collection]=await Promise.all([snapshot.libraries.find(lib=>lib.id===libraryId)?.unlocked?api(`${libraryPath(libraryId)}/images`):Promise.resolve([]),api('/api/encrypted')]);
+ if(!current())return;for(const image of [...rows,...collection.images]){const latest=latestPreviews.get(image.id);if(image.protected&&latest&&(image.previewVersion||0)<latest.previewVersion)Object.assign(image,latest);}state.libraryImages=rows;state.encryptedImages=collection.images;state.lockedLibraries=collection.lockedLibraries;state.images=view==='encrypted'?collection.images:rows;render();queueEncryptedPreviews();
+ }finally{refreshInFlight--;}
+}
 function applySnapshot(snapshot){if(snapshot.libraries.some(lib=>!lib.unlocked&&state.libraries.find(previous=>previous.id===lib.id)?.unlocked))clearSensitiveViews();if(state.lockRevision!==undefined&&state.lockRevision!==snapshot.lockRevision)clearSensitiveViews();state.lockRevision=snapshot.lockRevision;state.libraries=snapshot.libraries;state.settings=snapshot.settings;state.masterPassword=snapshot.masterPassword||{};if(!currentLibrary())state.libraryId=state.libraries[0].id;const library=currentLibrary();if(state.view!=='encrypted'&&!library.unlocked&&(state.images.length||state.detailId))clearSensitiveViews();const random=state.randomImage;if(random){const lib=state.libraries.find(l=>l.id===random.libraryId);if(!lib||!lib.unlocked||!lib.allowRandom||(random.encrypted&&!state.settings.allowEncryptedRandom)){stopRandom();state.randomImage=null;$('random-image').removeAttribute('src');$('random-caption').textContent='';$('random-error').textContent='图片库已锁定或不再允许展示。';}}}
 
-function openDetail(id,unlockedImage){closeOriginalView();const image=unlockedImage||state.images.find(i=>i.id===id);if(!image)return;if(image.locked){showProtection('unlock',[id],image.libraryId);return;}if(state.detailId&&state.detailId!==id)releaseSingle(state.detailId);state.detailId=id;state.detailLibraryId=image.libraryId;$('protect-image').hidden=!!image.protected||!!state.libraries.find(l=>l.id===image.libraryId)?.encrypted;$('unprotect-image').hidden=!image.protected;for(const input of $('edit-form').elements)input.disabled=false;$('detail-image').src=fileURL(image);$('detail-image').alt=image.title;const form=$('edit-form');for(const field of ['title','character','series','folder','artist','source'])form.elements[field].value=image[field]||'';form.elements.tags.value=image.tags.join('，');form.elements.favorite.checked=image.favorite;$('image-info').textContent=`${image.filename} · ${(image.bytes/1048576).toFixed(2)} MB · ${new Date(image.created_at).toLocaleDateString()}`;$('download').href=fileURL(image)+'?download=1';if(!$('detail').open)$('detail').showModal();}
+function openDetail(id,unlockedImage){closeOriginalView();const image=unlockedImage||state.images.find(i=>i.id===id);if(!image)return;if(image.locked){showProtection('unlock',[id],image.libraryId);return;}if(state.detailId&&state.detailId!==id)releaseSingle(state.detailId);state.detailId=id;state.detailLibraryId=image.libraryId;$('protect-image').hidden=!!image.protected||!!state.libraries.find(l=>l.id===image.libraryId)?.encrypted;$('unprotect-image').hidden=!image.protected;for(const input of $('edit-form').elements)input.disabled=false;setImageSource($('detail-image'),fileURL(image));$('detail-image').alt=image.title;const form=$('edit-form');for(const field of ['title','character','series','folder','artist','source'])form.elements[field].value=image[field]||'';form.elements.tags.value=image.tags.join('，');form.elements.favorite.checked=image.favorite;$('image-info').textContent=`${image.filename} · ${(image.bytes/1048576).toFixed(2)} MB · ${new Date(image.created_at).toLocaleDateString()}`;$('download').href=fileURL(image)+'?download=1';if(!$('detail').open)$('detail').showModal();}
 function navigateDetail(delta){const images=filtered();const index=images.findIndex(i=>i.id===state.detailId);if(images.length)openDetail(images[(index+delta+images.length)%images.length].id);}
 function splitTags(value){return [...new Set(value.split(/[,，\n]/).map(s=>s.trim()).filter(Boolean))];}
 $('library-select').onchange=async event=>{const libraryId=event.target.value;clearSensitiveViews(false);state.libraryId=libraryId;changeView('all');try{await refresh();}catch(e){toast(e.message);}};
@@ -175,7 +204,7 @@ function playRandom(){stopRandom();randomTimer=setInterval(nextRandom,Number($('
 $('random-play').onclick=()=>randomTimer?stopRandom():playRandom();$('random-interval').onchange=()=>{if(randomTimer)playRandom();};
 $('random-dialog').addEventListener('close',()=>{stopRandom();state.randomImage=null;$('random-image').removeAttribute('src');$('random-image').alt='';$('random-caption').textContent='';});
 if(window.arkDesktop){$('open-folder').hidden=false;$('open-folder').onclick=()=>window.arkDesktop.openDataFolder();window.arkDesktop.onLibrariesLocked(()=>refresh().catch(e=>toast(e.message)));}
-setInterval(async()=>{try{const snapshot=await api('/api/state');const before=JSON.stringify(state.libraries);applySnapshot(snapshot);if(before!==JSON.stringify(state.libraries)||!state.images.length)await refresh();}catch{}},5000);
+setInterval(()=>refresh({poll:true}).catch(()=>{}),5000);
 refresh().catch(e=>toast(e.message));
 $('batch-delete').onclick=async()=>{
  const ids=[...state.selected];const libraryId=state.libraryId;if(!ids.length||state.deleting)return;
@@ -227,7 +256,7 @@ $('protection-form').onsubmit=async event=>{
  try{
   if(mode==='setup'||(mode==='encrypt'&&!state.masterPassword.configured)){if(password!==$('protection-confirm').value)throw Error('两次密码不一致。');applySnapshot(await api('/api/master-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password})}));}
   let result;
-  if(mode==='encrypt'){const previews={};for(const id of ids){if(state.images.find(image=>image.id===id)?.protected)continue;const preview=await captureEncryptedPreview({id,libraryId});if(preview)previews[id]=preview;}await postOperation('protect',{ids,previews,...(password&&state.masterPassword.configured?{password}:{})},libraryId);$('detail').close();await refresh();toast('已使用统一密码加密，原位置和分类保留');}
+  if(mode==='encrypt'){const previews={};for(const id of ids){if(state.images.find(image=>image.id===id)?.protected)continue;const preview=await captureEncryptedPreview({id,libraryId});if(preview)previews[id]=preview;}const protectedRows=await postOperation('protect',{ids,previews,...(password&&state.masterPassword.configured?{password}:{})},libraryId);if(state.libraryId===libraryId){state.libraryImages=protectedRows;if(state.view!=='encrypted')state.images=protectedRows;render();}$('detail').close();await refresh();toast('已使用统一密码加密，原位置和分类保留');}
   else if(mode==='unlock'){result=await postOperation('unlock-image',{id:ids[0],password,scope,legacyPassword},libraryId);await refresh();openDetail(ids[0],result.image);toast(`已临时解锁 ${result.count} 张图片`);}
   else if(mode==='all'){result=await api('/api/unlock-matching',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password,scope,legacyPassword})});await refresh();toast(`已解锁 ${result.count} 张${result.remaining||result.lockedLibraries?'；旧版未匹配内容仍保持锁定':''}${result.issues.length?'；部分加密数据需要检查备份':''}`);}
   else if(mode==='library'){await api(`${libraryPath(libraryId)}/unlock`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password,scope,legacyPassword})});await refresh();toast('旧加密库已临时解锁');}
@@ -338,7 +367,7 @@ const pendingPreviews=new Set(),previewErrors=new Set();
 async function saveEncryptedPreview(image,loaded){
  if(!image?.protected||image.previewVersion===2||pendingPreviews.has(image.id))return;
  pendingPreviews.add(image.id);renderPreviewStatus();const revision=state.lockRevision;
- try{const preview=await captureEncryptedPreview(image,loaded);if(revision!==state.lockRevision)return;if(!preview){previewErrors.add(image.id);return;}await postOperation('preview',{id:image.id,preview},image.libraryId);previewErrors.delete(image.id);for(const source of [state.images,state.libraryImages,state.encryptedImages]){const row=source.find(row=>row.id===image.id);if(row){row.hasPreview=true;row.previewVersion=2;}}if(revision===state.lockRevision&&state.images.some(row=>row.id===image.id&&row.locked))render();}catch{if(revision===state.lockRevision)previewErrors.add(image.id);}finally{pendingPreviews.delete(image.id);renderPreviewStatus();}
+ try{const preview=await captureEncryptedPreview(image,loaded);if(revision!==state.lockRevision)return;if(!preview){previewErrors.add(image.id);return;}await postOperation('preview',{id:image.id,preview},image.libraryId);latestPreviews.set(image.id,{hasPreview:true,previewVersion:2,previewWidth:preview.width,previewHeight:preview.height});previewErrors.delete(image.id);for(const source of [state.images,state.libraryImages,state.encryptedImages]){const row=source.find(row=>row.id===image.id);if(row){row.hasPreview=true;row.previewVersion=2;row.previewWidth=preview.width;row.previewHeight=preview.height;}}if(revision===state.lockRevision&&state.images.some(row=>row.id===image.id&&row.locked))render();}catch{if(revision===state.lockRevision)previewErrors.add(image.id);}finally{pendingPreviews.delete(image.id);renderPreviewStatus();}
 }
 let previewQueueRunning=false;
 async function queueEncryptedPreviews(){

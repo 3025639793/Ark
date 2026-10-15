@@ -212,3 +212,20 @@ html:not([data-theme-art='custom']) .melusine-guide span { white-space: normal; 
 .locked-cover .locked-preview { filter: brightness(.9); transform: scale(1.03); }
 .locked-cover .encryption-overlay { position: absolute; z-index: 1; width: 44%; height: 58%; max-width: 116px; object-fit: contain; left: 50%; top: 46%; transform: translate(-50%,-50%); pointer-events: none; }
 .locked-hint { position: absolute; z-index: 2; bottom: 12px; left: 50%; transform: translateX(-50%); white-space: nowrap; font-size: 11px; padding: 3px 10px; border-radius: 20px; background: #2d2439b8; color: #fff; pointer-events: none; }
+
+/* Keep the preview and decoded image in the same frame throughout unlocking. */
+.photo-media { display: block; position: relative; isolation: isolate; overflow: hidden; width: 100%; aspect-ratio: 1; min-height: 110px; max-height: 420px; background: #4d405b; }
+.photo-media .card-image, .photo-media .card-preview { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; max-height: none; padding: 0; object-fit: cover; }
+.photo-media .card-preview { z-index: 0; background: transparent; }
+.photo-media .card-image { z-index: 1; opacity: 0; background: transparent; transition: opacity .22s ease-out; }
+.photo-media.media-ready .card-image { opacity: 1; }
+.photo-media.locked-cover { height: auto; }
+.photo-media.locked-cover .card-image { opacity: 0; transition: none; }
+.photo-media .encryption-overlay { position: absolute; z-index: 2; width: 44%; height: 58%; max-width: 116px; object-fit: contain; left: 50%; top: 46%; transform: translate(-50%,-50%); pointer-events: none; transition: opacity .18s ease-out; }
+.photo-media .locked-hint { transition: opacity .18s ease-out; }
+.photo-media.media-ready .encryption-overlay, .photo-media.media-ready .locked-hint { opacity: 0; }
+.photo-media.locked-cover .encryption-overlay, .photo-media.locked-cover .locked-hint { opacity: 1; transition: none; }
+.photo-media .card-preview:not([src]) { visibility: hidden; }
+dialog[open] { animation: dialog-arrive .16s ease-out; }
+@keyframes dialog-arrive { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .photo-media .card-image, .photo-media .encryption-overlay, .photo-media .locked-hint { transition: none; } dialog[open] { animation: none; } }

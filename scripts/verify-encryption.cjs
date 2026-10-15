@@ -39,6 +39,23 @@ module.exports.verifyEncryption=async(window,server)=>{
   if(samples[0].pixels.join(',')===samples[1].pixels.join(','))throw Error('Different images must produce different blurred covers');
   for(const sample of samples){const colours=new Set();for(let n=0;n<sample.pixels.length;n+=4)colours.add(sample.pixels.slice(n,n+3).join(','));if(colours.size<10)throw Error('Blurred thumbnail must retain original composition and soft colour transitions');}
   const stable=previews.slice();render();if(stable.some(image=>!image.isConnected))throw Error('Locked preview refresh must preserve image elements');
+  const cards=[...document.querySelectorAll('#gallery .card')],frames=cards.map(card=>card.querySelector('.photo-media'));const heights=frames.map(frame=>frame.getBoundingClientRect().height);
+  const nativeDecode=HTMLImageElement.prototype.decode;let releaseDecode;let gate=new Promise(resolve=>{releaseDecode=resolve;});
+  HTMLImageElement.prototype.decode=function(){const decoded=nativeDecode.call(this);return this.matches('#gallery .card-image')?Promise.all([decoded,gate]).then(()=>{}):decoded;};
+  try{
+   await api('/api/unlock-matching',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password,scope:'session'})});await refresh();
+   await wait(()=>frames.every(frame=>frame.querySelector('.card-image').naturalWidth>0));
+   if(cards.some(card=>!card.isConnected)||frames.some((frame,index)=>Math.abs(frame.getBoundingClientRect().height-heights[index])>1))throw Error('Unlocking must retain card identity and reserved image dimensions');
+   if(frames.some(frame=>frame.classList.contains('media-ready')||!frame.querySelector('.card-preview').hasAttribute('src')))throw Error('Blurred covers must stay visible while original decoding is delayed');
+   render();if(frames.some(frame=>frame.classList.contains('media-ready')))throw Error('Background rendering must not reveal undecoded originals');
+   releaseDecode();await wait(()=>frames.every(frame=>frame.classList.contains('media-ready')));
+   if(frames.some((frame,index)=>Math.abs(frame.getBoundingClientRect().height-heights[index])>1))throw Error('Decode completion must not move surrounding cards');
+   await api('/api/lock-all',{method:'POST'});await refresh();
+   if(frames.some(frame=>frame.classList.contains('media-ready')||frame.querySelector('.card-image').hasAttribute('src')))throw Error('Locking must immediately clear the original layer');
+   gate=new Promise(resolve=>{releaseDecode=resolve;});await api('/api/unlock-matching',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password,scope:'session'})});await refresh();await wait(()=>frames.every(frame=>frame.querySelector('.card-image').naturalWidth>0));
+   await api('/api/lock-all',{method:'POST'});await refresh();releaseDecode();await new Promise(resolve=>setTimeout(resolve,100));
+   if(cards.some(card=>!card.isConnected)||frames.some(frame=>frame.classList.contains('media-ready')||frame.querySelector('.card-image').hasAttribute('src')))throw Error('A late decode must not reveal a newly locked original');
+  }finally{releaseDecode();HTMLImageElement.prototype.decode=nativeDecode;}
   const seal=document.querySelector('.encryption-overlay');await seal.decode();if(!seal.naturalWidth)throw Error('Transparent encryption seal did not load');const frame=seal.parentElement.getBoundingClientRect(),bounds=seal.getBoundingClientRect();if(bounds.width>=frame.width*.8||bounds.height>=frame.height*.8)throw Error('Seal must leave the blurred preview visible around it');
  })()`);
  const screenshot=await window.webContents.capturePage();await fs.mkdir('release',{recursive:true});await fs.writeFile('release/encrypted-covers.png',screenshot.toPNG());
