@@ -123,7 +123,7 @@ function render(){
   cards.push(card);
  }
  reconcileChildren($('gallery'),cards);const totalCards=characterWall?new Set(images.filter(image=>image.character).map(image=>image.character)).size:images.length;$('gallery-more').hidden=cards.length>=totalCards||locked;$('gallery-page-status').textContent=totalCards>120?`已显示 ${cards.length} / ${totalCards}`:'';
- if(state.backingUp||state.processing){for(const id of ['library-select','folder-trigger','select-toggle','encrypted-unlock-all','encrypted-lock-all','delete-character'])$(id).disabled=true;document.querySelectorAll('.upload-trigger').forEach(button=>button.disabled=true);}
+ if(state.backingUp||state.processing){for(const id of ['library-select','folder-trigger','select-toggle','lock-all','lock-library','encrypted-unlock-all','encrypted-lock-all','delete-character'])$(id).disabled=true;document.querySelectorAll('.upload-trigger').forEach(button=>button.disabled=true);}
  const isEmpty=!$('gallery').childElementCount;$('gallery').hidden=isEmpty||locked;$('empty').hidden=!isEmpty||locked;
  const first=!state.images.length&&!state.encryptedImages.length&&!encryptedView;const noCharacters=state.view==='characters'&&!characters.length;
  $('empty-title').textContent=encryptedView?'加密内容会集中显示在这里':first?'第一份喜欢，从这里开始':noCharacters?'为图片添加角色，点亮收藏墙':'这里暂时没有图片';
