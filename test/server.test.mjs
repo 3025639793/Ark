@@ -1,11 +1,22 @@
 import {test} from 'node:test';
 import http from 'node:http';
+import net from 'node:net';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm} from 'node:fs/promises';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {startLocalApp} from '../server.mjs';
 const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=','base64');
+test('shutdown drains pending work, locks keys and closes unused browser connections',async()=>{
+ const dir=await mkdtemp(join(tmpdir(),'ark-shutdown-'));let app,socket,timer;
+ try{
+  app=await startLocalApp({dataDir:dir});await app.store.setupMaster('shutdown-password');
+  socket=net.connect(Number(new URL(app.url).port),'127.0.0.1');await new Promise((resolve,reject)=>{socket.once('connect',resolve);socket.once('error',reject);});
+  let completed=false;app.store.serial(async()=>{await new Promise(resolve=>setTimeout(resolve,50));completed=true;});
+  await Promise.race([app.close(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Idle browser connection blocked shutdown')),2000);})]);
+  assert.equal(completed,true);assert.equal(app.store.masterKey,null);app=null;
+ }finally{clearTimeout(timer);socket?.destroy();await app?.close();await rm(dir,{recursive:true,force:true});}
+});
 test('local-only API protects library operations, supports encrypted imports and blocks locked files',async()=>{
  const dir=await mkdtemp(join(tmpdir(),'ark-api-'));let app;
  try{

@@ -92,7 +92,7 @@ export async function startLocalApp({dataDir=process.env.ARK_DATA_DIR||join(root
  });
  server.requestTimeout=120000;await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(port,'127.0.0.1',resolve);});
  const timer=setInterval(()=>store.serial(()=>store.expire()),10000);timer.unref();
- return {url:`http://127.0.0.1:${server.address().port}`,store,async close(){clearInterval(timer);await store.serial(()=>store.lockAll());await new Promise(resolve=>server.close(resolve));}};
+ return {url:`http://127.0.0.1:${server.address().port}`,store,async close(){clearInterval(timer);await store.serial(()=>store.lockAll());await new Promise(resolve=>{server.close(resolve);server.closeAllConnections();});}};
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
  const app=await startLocalApp();console.log(`Ark 本地相册：${app.url}`);
