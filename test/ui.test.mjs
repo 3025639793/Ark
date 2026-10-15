@@ -21,7 +21,12 @@ test('album UI imports, edits, creates a vault and removes displayed images on l
   const w=dom.window;const $=id=>w.document.getElementById(id);await waitUntil(()=>$('library-select').options.length===1);
   await w.upload([new File([png],'portrait.png',{type:'image/png'})]);assert.equal($('gallery').querySelectorAll('.card').length,1);
   $('gallery').querySelector('.card-open').click();assert.equal($('detail').open,true);const edit=$('edit-form');edit.elements.character.value='芙莉莲';edit.elements.tags.value='壁纸，冬天';edit.dispatchEvent(new w.Event('submit',{cancelable:true}));
-  await waitUntil(()=>$('character-list').textContent.includes('芙莉莲'));$('detail').close();
+  await waitUntil(()=>$('character-list').textContent.includes('芙莉莲'));
+  $('view-original').click();assert.equal($('original-viewer').open,true);assert.equal($('detail').open,true);assert.equal($('original-image').getAttribute('src'),$('detail-image').getAttribute('src'));
+  for(const [key,value] of Object.entries({naturalWidth:640,naturalHeight:480}))Object.defineProperty($('original-image'),key,{configurable:true,value});
+  Object.defineProperty($('original-viewport'),'clientWidth',{configurable:true,value:500});Object.defineProperty($('original-viewport'),'clientHeight',{configurable:true,value:400});$('original-image').dispatchEvent(new w.Event('load'));
+  assert.equal($('original-image').hidden,false);$('original-actual').click();assert.equal($('original-image').style.width,'640px');assert.equal($('original-image').style.height,'480px');$('original-zoom-in').click();assert.equal($('original-image').style.width,'800px');$('original-fit').click();assert.ok(parseFloat($('original-image').style.width)<=468);
+  $('original-viewer').close();assert.equal($('original-image').hasAttribute('src'),false);assert.equal($('detail').open,true);$('detail').close();
   const folderFile=new File([png,Buffer.from('folder')],'folder.png',{type:'image/png'});Object.defineProperty(folderFile,'webkitRelativePath',{value:'图片/原神/芙宁娜/壁纸/folder.png'});
   const otherFile=new File([png,Buffer.from('other')],'other.png',{type:'image/png'});Object.defineProperty(otherFile,'webkitRelativePath',{value:'图片/其他/子目录/other.png'});
   const textFile=new File(['hello'],'note.txt',{type:'text/plain'});Object.defineProperty(textFile,'webkitRelativePath',{value:'图片/note.txt'});
@@ -48,7 +53,7 @@ test('album UI imports, edits, creates a vault and removes displayed images on l
   w.document.querySelector('[data-view=encrypted]').click();await waitUntil(()=>$('gallery').querySelectorAll('.card').length===1&&$('view-title').textContent.includes('加密库'));assert.equal($('library-select').value,'default');
   $('gallery').querySelector('.card-open').click();assert.equal($('protection-dialog').open,true);$('protection-password').value='ui-photo-password';$('protection-form').dispatchEvent(new w.Event('submit',{cancelable:true}));
   await waitUntil(()=>$('detail').open&&!$('protection-dialog').open);assert.equal($('detail-image').hasAttribute('src'),true);assert.equal($('gallery').querySelector('img').hasAttribute('src'),false);
-  $('detail').close();await waitUntil(()=>app.store.imageKeys.size===0);assert.equal($('detail-image').hasAttribute('src'),false);
+  $('view-original').click();assert.equal($('original-viewer').open,true);$('detail').close();assert.equal($('original-viewer').open,false);assert.equal($('original-image').hasAttribute('src'),false);await waitUntil(()=>app.store.imageKeys.size===0);assert.equal($('detail-image').hasAttribute('src'),false);
   $('encrypted-unlock-all').click();$('protection-password').value='incorrect-password';$('protection-form').dispatchEvent(new w.Event('submit',{cancelable:true}));await waitUntil(()=>$('protection-error').textContent&&!$('protection-form').querySelector('button[type=submit]').disabled);assert.equal($('gallery').querySelector('img').hasAttribute('src'),false);
   $('protection-password').value='ui-photo-password';$('protection-form').dispatchEvent(new w.Event('submit',{cancelable:true}));await waitUntil(()=>!$('protection-dialog').open&&$('gallery').querySelector('img')?.hasAttribute('src'));$('gallery').querySelector('.card-open').click();
   $('unprotect-image').click();await waitUntil(()=>!$('detail').open&&$('gallery').querySelectorAll('.card').length===0);w.document.querySelector('[data-view=all]').click();await waitUntil(()=>$('gallery').textContent.includes('portrait'));

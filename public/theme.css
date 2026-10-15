@@ -182,3 +182,25 @@ html:not([data-theme-art='custom']) .melusine-guide span { white-space: normal; 
 .sidebar-section { min-height: 90px; }
 .sidebar>.brand, .sidebar>.library-picker, .sidebar>nav, .sidebar>.village-note, .sidebar>.sidebar-footer { flex-shrink: 0; }
 @media (max-width:700px) { .sidebar-section { min-height: 0; } }
+
+/* Image controls occupy their own space and paint above every image. */
+.image-stage { min-width: 0; padding: 24px 62px; isolation: isolate; overflow: hidden; }
+.image-stage img { position: relative; z-index: 0; display: block; }
+.image-nav { z-index: 3; width: 44px; height: 44px; display: grid; place-items: center; padding: 0; line-height: 1; top: 50%; transform: translateY(-50%); color: #fff; background: #332b43e8; border: 1px solid #ffffff65; box-shadow: 0 2px 10px #0005; }
+#prev { left: 10px; right: auto; } #next { right: 10px; left: auto; }
+.image-nav:hover { background: #65517ff5; transform: translateY(-50%); }
+.detail-bottom { flex-wrap: wrap; gap: 10px; }
+#detail-image { cursor: zoom-in; }
+#original-viewer { width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; border-radius: 0; background: #211d29; color: #f5effb; overflow: hidden; }
+#original-viewer[open] { display: flex; flex-direction: column; }
+.original-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding: 12px 16px; flex-shrink: 0; background: #332b43; }
+#original-caption { min-width: 0; max-width: 35%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.original-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.original-controls button { padding: 7px 10px; color: #f5effb; background: #574665; font-size: 12px; }
+#original-zoom { min-width: 45px; text-align: center; font-size: 12px; }
+.original-viewport { flex: 1; min-height: 0; min-width: 0; overflow: auto; cursor: grab; overscroll-behavior: contain; }
+.original-viewport.dragging { cursor: grabbing; user-select: none; }
+.original-canvas { display: grid; place-items: center; width: max-content; height: max-content; min-width: 100%; min-height: 100%; padding: 16px; }
+#original-image { display: block; max-width: none; max-height: none; flex-shrink: 0; object-fit: contain; user-select: none; }
+.original-info { flex-shrink: 0; margin: 0; padding: 8px 16px; color: #d3c8df; background: #332b43; font-size: 11px; }
+@media (max-width:700px) { .image-stage { padding: 15px 60px; } .original-toolbar { padding: 10px; } #original-caption { max-width: 100%; } .original-controls { gap: 5px; } .original-controls button { font-size: 11px; padding: 6px 8px; } .original-info { font-size: 10px; } }

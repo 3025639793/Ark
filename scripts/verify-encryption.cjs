@@ -14,12 +14,14 @@ module.exports.verifyEncryption=async(window,server)=>{
   await wait(()=>document.getElementById('detail').open&&!document.getElementById('protection-dialog').open);
   await wait(()=>document.getElementById('detail-image').naturalWidth>0);
   if([...document.querySelectorAll('#gallery img')].some(img=>img.hasAttribute('src')))throw Error('Single unlock must not expose aggregate thumbnails');
-  const detail=document.getElementById('detail');const closed=new Promise(resolve=>detail.addEventListener('close',resolve,{once:true}));detail.close();await closed;
+  document.getElementById('view-original').click();if(!document.getElementById('original-viewer').open)throw Error('Encrypted original view did not open');
+  const detail=document.getElementById('detail');const closed=new Promise(resolve=>detail.addEventListener('close',resolve,{once:true}));detail.close();await closed;if(document.getElementById('original-viewer').open||document.getElementById('original-image').hasAttribute('src'))throw Error('Closing a single encrypted detail must clear the original view');
   await new Promise(resolve=>setTimeout(resolve,100));
   const locked=await fetch(fileURL({libraryId:'default',id}),{headers:{'X-Ark-Token':token}});if(locked.status!==423)throw Error('Closing single view must revoke file access');
   document.getElementById('encrypted-unlock-all').click();document.getElementById('protection-password').value=password;document.getElementById('protection-form').requestSubmit();
   await wait(()=>!document.getElementById('protection-dialog').open&&[...document.querySelectorAll('#gallery img')].filter(img=>img.hasAttribute('src')).length===2);
-  document.getElementById('encrypted-lock-all').click();await wait(()=>[...document.querySelectorAll('#gallery img')].every(img=>!img.hasAttribute('src')));
+  openDetail(id);document.getElementById('view-original').click();
+  document.getElementById('encrypted-lock-all').click();await wait(()=>[...document.querySelectorAll('#gallery img')].every(img=>!img.hasAttribute('src')));if(document.getElementById('original-viewer').open||document.getElementById('original-image').hasAttribute('src'))throw Error('Lock-all must clear the original view');
  })()`);
  await store.serial(async()=>{store.lockAll();await store.removeBatch('default',[a.id]);await store.removeBatch(other,[b.id]);store.catalogs.delete(other);store.registry.libraries=store.registry.libraries.filter(l=>l.id!==other);delete store.registry.master;await store.saveRegistry();});
  await window.webContents.executeJavaScript(`(async()=>{changeView('all');await refresh();await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));})()`);
