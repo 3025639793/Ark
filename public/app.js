@@ -24,7 +24,7 @@ function filtered(){
 function selectOptions(select,values,selected){select.replaceChildren();select.append(new Option('所有作品',''));for(const value of values)select.append(new Option(value,value));select.value=values.includes(selected)?selected:'';state.series=select.value;}
 function render(){
  renderUpdate();
- const library=currentLibrary();const locked=library?.encrypted&&!library.unlocked;
+ const library=currentLibrary();const locked=library?.encrypted&&!library.unlocked;const characterWall=state.view==='characters'&&!state.character;
  $('library-select').replaceChildren(...state.libraries.map(l=>new Option(`${l.encrypted?(l.unlocked?'◇ ':'◆ '):''}${l.name}`,l.id)));$('library-select').value=state.libraryId;
  $('lock-library').hidden=!library?.encrypted||!library.unlocked;$('locked-library').hidden=!locked;
  document.querySelectorAll('.upload-trigger').forEach(b=>b.disabled=locked||state.uploading);
@@ -32,8 +32,9 @@ function render(){
 
  $('all-count').textContent=state.images.length;$('favorite-count').textContent=state.images.filter(i=>i.favorite).length;$('unfiled-count').textContent=state.images.filter(i=>!i.character&&!i.series&&!i.folder&&!i.tags.length).length;
  const characters=groups('character');$('character-count').textContent=characters.length||'';
- $('character-list').replaceChildren();
- for(const [name,images] of characters){const button=element('button',`character-link${state.character===name?' active':''}`);const img=element('img','character-avatar');if(!images[0].locked)img.src=fileURL(images[0]);img.alt='';img.loading='lazy';button.append(img,element('span','',name),element('small','',images.length));button.onclick=()=>changeView('all',name);$('character-list').append(button);}
+ const characterScroll=$('character-list').scrollTop;$('character-list').replaceChildren();
+ for(const [name,images] of characters){const button=element('button',`character-link${state.character===name?' active':''}`);const img=element('img','character-avatar');if(!images[0].locked)img.src=fileURL(images[0]);img.alt='';img.loading='lazy';button.title=name;if(state.character===name)button.setAttribute('aria-current','page');button.append(img,element('span','',name),element('small','',images.length));button.onclick=()=>changeView('characters',name);$('character-list').append(button);}
+ $('character-list').scrollTop=characterScroll;
  if(!characters.length)$('character-list').append(element('p','nav-label','整理图片后，角色会出现在这里。'));
  for(const [field,id] of [['character','characters-options'],['series','series-options']]){$(id).replaceChildren(...groups(field).map(([value])=>new Option(value,value)));}
  selectOptions($('series-filter'),groups('series').map(([n])=>n),state.series);
@@ -41,18 +42,19 @@ function render(){
  if(state.folder&&!folders.has(state.folder))state.folder='';
  $('folder-filter').replaceChildren(new Option('所有文件夹分类',''),...[...folders].sort((a,b)=>a.localeCompare(b,'zh')).map(folder=>new Option(folder,folder)));$('folder-filter').value=state.folder;
 
+ const images=filtered();
  const titles={all:'全部图片',favorite:'特别喜欢',unfiled:'待整理',characters:'角色收藏墙'};const title=state.character||titles[state.view];
- $('view-title').replaceChildren(document.createTextNode(title),element('span','title-dot','.'));$('crumb').textContent=title;
+ $('view-title').replaceChildren(document.createTextNode(title),element('span','title-dot','.'));renderBreadcrumb(title);$('view-back').hidden=state.view!=='characters';$('view-back').textContent=state.character?'← 返回角色收藏墙':'← 返回全部图片';
  $('view-description').textContent=state.character?'属于这个角色的每一份喜欢。':state.view==='characters'?'把喜欢的角色，收藏成自己的图鉴。':state.view==='unfiled'?'不急，慢慢给喜欢的图片找到归属。':'给每一份喜欢，留一个位置。';
- $('storage').textContent=`${state.images.length} 张图片 · ${(state.images.reduce((sum,i)=>sum+i.bytes,0)/1048576).toFixed(1)} MB`;
- document.querySelectorAll('[data-view]').forEach(e=>e.classList.toggle('active',e.dataset.view===state.view&&!state.character));
+ const summaryImages=characterWall?images.filter(i=>i.character):images;$('storage').textContent=`${characterWall?`${new Set(summaryImages.map(i=>i.character)).size} 个角色 · `:''}${summaryImages.length} 张图片 · ${(summaryImages.reduce((sum,i)=>sum+i.bytes,0)/1048576).toFixed(1)} MB`;
+ document.querySelectorAll('[data-view]').forEach(e=>{const active=e.dataset.view===state.view;e.classList.toggle('active',active);if(active&&!state.character)e.setAttribute('aria-current','page');else e.removeAttribute('aria-current');});
  const tags=[...new Set(state.images.flatMap(i=>i.tags))].sort((a,b)=>a.localeCompare(b,'zh'));if(state.tag&&!tags.includes(state.tag))state.tag='';
  $('tag-list').replaceChildren();for(const tag of ['',...tags]){if(!tag&&!tags.length)continue;const b=element('button',`tag${state.tag===tag?' active':''}`,tag||'全部标签');b.onclick=()=>{state.tag=tag;render();};$('tag-list').append(b);}
- $('batch-bar').hidden=!state.selecting;$('select-toggle').textContent=state.selecting?'退出批量':'批量整理';$('selected-count').textContent=`已选 ${state.selected.size} 张`;$('batch-delete').textContent=state.deleting?'正在删除…':'删除所选';$('select-all').disabled=state.deleting;$('cancel-select').disabled=state.deleting;$('batch-edit').disabled=!state.selected.size||state.deleting;$('batch-delete').disabled=!state.selected.size||state.deleting;$('select-toggle').disabled=locked||state.deleting||state.view==='characters';
- $('gallery').replaceChildren();const images=filtered();
- if(state.view==='characters'){
+ $('batch-bar').hidden=!state.selecting;$('select-toggle').textContent=state.selecting?'退出批量':'批量整理';$('selected-count').textContent=`已选 ${state.selected.size} 张`;$('batch-delete').textContent=state.deleting?'正在删除…':'删除所选';$('select-all').disabled=state.deleting;$('cancel-select').disabled=state.deleting;$('batch-edit').disabled=!state.selected.size||state.deleting;$('batch-delete').disabled=!state.selected.size||state.deleting;$('select-toggle').disabled=locked||state.deleting||characterWall;
+ $('gallery').replaceChildren();
+ if(characterWall){
   const visible=characters.map(([name])=>[name,images.filter(i=>i.character===name)]).filter(([,items])=>items.length);
-  for(const [name,items] of visible){const card=element('article','card role-card');const button=element('button','card-open');const img=element('img','card-image');const cover=items.find(i=>!i.locked&&(i.favorite))||items.find(i=>!i.locked);if(cover)img.src=fileURL(cover);img.alt=name;img.loading='lazy';const info=element('div','card-info');info.append(element('h3','',name),element('p','',`${items.length} 张收藏`));button.append(img,info);button.onclick=()=>changeView('all',name);card.append(button);$('gallery').append(card);}
+  for(const [name,items] of visible){const card=element('article','card role-card');const button=element('button','card-open');const img=element('img','card-image');const cover=items.find(i=>!i.locked&&(i.favorite))||items.find(i=>!i.locked);if(cover)img.src=fileURL(cover);img.alt=name;img.loading='lazy';const info=element('div','card-info');info.append(element('h3','',name),element('p','',`${items.length} 张收藏`));button.append(img,info);button.onclick=()=>changeView('characters',name);card.append(button);$('gallery').append(card);}
  }else for(const image of images){
   const card=element('article',`card${state.selected.has(image.id)?' selected':''}`);const button=element('button','card-open');const img=element('img','card-image');if(!image.locked)img.src=fileURL(image);else img.classList.add('locked-placeholder');img.alt=image.title;img.loading='lazy';const info=element('div','card-info');info.append(element('h3','',image.title||image.filename),element('p','',[image.folder,image.character,image.series,...image.tags.slice(0,2)].filter(Boolean).join(' · ')||'等待整理'));button.append(img,info);button.onclick=()=>state.selecting?toggleSelected(image.id):openDetail(image.id);card.append(button);
   if(state.selecting){const choose=element('button','select-image',state.selected.has(image.id)?'✓':'○');choose.setAttribute('aria-label',`选择 ${image.title}`);choose.setAttribute('aria-pressed',String(state.selected.has(image.id)));choose.onclick=()=>toggleSelected(image.id);card.append(choose);}
@@ -65,7 +67,16 @@ function render(){
  $('empty-description').textContent=first?'导入喜欢的图片，再用角色、作品和标签慢慢整理。':noCharacters?'打开一张图片，填写角色名称，或通过批量整理一次添加。':'试试其他筛选条件，或导入新的收藏。';
  $('empty').querySelector('.upload-trigger').textContent=first?'＋ 导入第一张图片':'＋ 导入图片';
 }
-function changeView(view,character=''){state.view=view;state.character=character;state.tag='';state.series='';state.folder='';state.selecting=false;state.selected.clear();render();}
+function renderBreadcrumb(title){
+ const container=$('breadcrumbs');container.replaceChildren();
+ function link(label,view){const button=element('button','breadcrumb-link',label);button.onclick=()=>changeView(view);container.append(button);}
+ function separator(){const span=element('span','breadcrumb-separator','/');span.setAttribute('aria-hidden','true');container.append(span);}
+ if(state.view==='all'&&!state.character){const label=element('span','','全部图片');label.setAttribute('aria-current','page');container.append(label);return;}
+ link('全部图片','all');separator();
+ if(state.character){link('角色收藏墙','characters');separator();}
+ const current=element('span','breadcrumb-current',title);current.setAttribute('aria-current','page');container.append(current);
+}
+function changeView(view,character=''){state.query='';$('search').value='';state.view=view;state.character=character;state.tag='';state.series='';state.folder='';state.selecting=false;state.selected.clear();render();}
 function toggleSelected(id){if(state.deleting)return;state.selected.has(id)?state.selected.delete(id):state.selected.add(id);render();}
 function replaceImage(image){state.images=state.images.map(i=>i.id===image.id?image:i);}
 async function refresh(){const snapshot=await api('/api/state');applySnapshot(snapshot);const library=currentLibrary();state.images=library?.unlocked?await api(`${libraryPath()}/images`):[];render();}
@@ -79,6 +90,7 @@ $('lock-library').onclick=async()=>{try{applySnapshot(await api(`${libraryPath()
 $('lock-all').onclick=async()=>{try{applySnapshot(await api('/api/lock-all',{method:'POST'}));clearSensitiveViews();await refresh();toast('加密库已全部锁定');}catch(e){toast(e.message);}};
 $('unlock-form').onsubmit=async event=>{event.preventDefault();const button=event.target.querySelector('button');button.disabled=true;$('unlock-error').textContent='';try{await api(`${libraryPath()}/unlock`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:$('unlock-password').value})});$('unlock-password').value='';await refresh();}catch(e){$('unlock-error').textContent=e.message;}finally{button.disabled=false;}};
 document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>changeView(b.dataset.view));
+$('view-back').onclick=()=>changeView(state.character?'characters':'all');
 $('search').oninput=event=>{state.query=event.target.value;render();};$('folder-filter').onchange=event=>{state.folder=event.target.value;render();};$('series-filter').onchange=event=>{state.series=event.target.value;render();};$('sort').onchange=event=>{state.sort=event.target.value;render();};
 $('select-toggle').onclick=()=>{state.selecting=!state.selecting;state.selected.clear();render();};$('cancel-select').onclick=()=>{state.selecting=false;state.selected.clear();render();};$('select-all').onclick=()=>{filtered().forEach(i=>state.selected.add(i.id));render();};
 $('batch-edit').onclick=()=>{$('batch-form').reset();$('batch-dialog').showModal();};
@@ -184,5 +196,5 @@ $('protection-dialog').addEventListener('close',()=>$('protection-form').reset()
 async function releaseSingle(id){await postOperation('lock-image',{id}).catch(()=>{});}
 $('detail').addEventListener('close',()=>{if(state.detailId)releaseSingle(state.detailId);state.detailId='';$('detail-image').removeAttribute('src');$('download').removeAttribute('href');$('edit-form').reset();});
 $('unprotect-image').onclick=async()=>{if(!confirm('解除这张图片的加密？之后无需密码即可查看。'))return;try{await postOperation('unprotect',{id:state.detailId});$('detail').close();await refresh();toast('已解除图片加密');}catch(e){toast(e.message);}};
-$('delete-character').onclick=async()=>{if(!state.character||!confirm(`删除角色分类「${state.character}」？图片会保留，仅清除角色归属。`))return;try{await postOperation('delete-character',{name:state.character});changeView('all');await refresh();toast('角色分类已删除，图片已保留');}catch(e){toast(e.message);}};
+$('delete-character').onclick=async()=>{if(!state.character||!confirm(`删除角色分类「${state.character}」？图片会保留，仅清除角色归属。`))return;try{await postOperation('delete-character',{name:state.character});changeView('characters');await refresh();toast('角色分类已删除，图片已保留');}catch(e){toast(e.message);}};
 window.addEventListener('beforeunload',event=>{if(state.uploading){event.preventDefault();event.returnValue='正在导入，请等待完成。';}});

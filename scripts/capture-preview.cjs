@@ -18,6 +18,7 @@ app.whenReady().then(async()=>{
   if(document.querySelectorAll('img[src=\"/mascot.png\"]').length!==1)throw Error('Logo should appear only once inside the album');
   await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
  })()`);
+ await require('./verify-navigation.cjs').verifyNavigation(window);
  if(errors.length)throw new Error(errors.join('\n'));
  const screenshot=await window.webContents.capturePage();await fs.mkdir('release',{recursive:true});await fs.writeFile('release/preview.png',screenshot.toPNG());
  window.destroy();await server.close();await fs.rm(dir,{recursive:true,force:true});console.log('Native Electron theme initialized; preview captured.');app.exit(0);

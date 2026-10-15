@@ -27,6 +27,13 @@ test('album UI imports, edits, creates a vault and removes displayed images on l
   const textFile=new File(['hello'],'note.txt',{type:'text/plain'});Object.defineProperty(textFile,'webkitRelativePath',{value:'图片/note.txt'});
   Object.defineProperty($('folder-input'),'files',{configurable:true,value:[folderFile,otherFile,textFile]});$('folder-input').dispatchEvent(new w.Event('change'));
   await waitUntil(()=>$('all-count').textContent==='3'&&!$('folder-trigger').disabled);assert.equal($('gallery').querySelectorAll('.card').length,3);
+  $('characters-trigger').click();assert.match($('view-title').textContent,/角色收藏墙/);assert.equal($('gallery').querySelectorAll('.role-card').length,3);assert.equal($('select-toggle').disabled,true);
+  $('gallery').querySelector('.role-card .card-open').click();assert.equal($('gallery').querySelectorAll('.role-card').length,0);assert.equal($('gallery').querySelectorAll('.card').length,1);assert.equal($('select-toggle').disabled,false);assert.equal($('view-back').hidden,false);assert.match($('view-back').textContent,/返回角色收藏墙/);assert.match($('storage').textContent,/^1 张图片/);
+  $('search').value='no matches';$('search').dispatchEvent(new w.Event('input'));assert.equal($('gallery').childElementCount,0);
+  $('view-back').click();assert.equal($('search').value,'');assert.equal($('gallery').querySelectorAll('.role-card').length,3);
+  const roleButton=[...$('character-list').querySelectorAll('button')].find(b=>b.textContent.includes('芙宁娜'));roleButton.click();assert.match($('view-title').textContent,/芙宁娜/);assert.equal($('select-toggle').disabled,false);
+  const crumbs=$('breadcrumbs').querySelectorAll('button');assert.equal(crumbs.length,2);crumbs[1].click();assert.equal($('gallery').querySelectorAll('.role-card').length,3);
+  $('view-back').click();assert.match($('view-title').textContent,/全部图片/);assert.equal($('gallery').querySelectorAll('.card').length,3);assert.equal($('view-back').hidden,true);
   assert.ok([...$('folder-filter').options].some(o=>o.value==='图片/原神'));$('folder-filter').value='图片/原神';$('folder-filter').dispatchEvent(new w.Event('change'));assert.equal($('gallery').querySelectorAll('.card').length,1);assert.match($('gallery').textContent,/folder/);
   $('select-toggle').click();$('select-all').click();w.confirm=()=>false;$('batch-delete').click();assert.equal($('all-count').textContent,'3');
   w.confirm=message=>{assert.match(message,/1 张/);assert.match(message,/原始文件夹不受影响/);return true;};$('batch-delete').click();await waitUntil(()=>$('all-count').textContent==='2');assert.equal($('gallery').querySelectorAll('.card').length,2);assert.ok(!$('gallery').textContent.includes('folder'));
