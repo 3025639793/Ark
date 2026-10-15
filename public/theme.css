@@ -149,3 +149,24 @@ html:not([data-theme-art='custom']) .melusine-guide span { white-space: normal; 
 @media (max-width: 700px) {
  html:not([data-theme-art='custom']) .melusine-guide { display: none; }
 }
+
+.folder-preview-dialog { width: min(900px,94vw); padding: 24px; }
+.folder-preview-dialog h2 { margin: 0; font-size: 20px; }
+.folder-preview-tools, .folder-preview-actions { display: flex; align-items: center; gap: 16px; justify-content: space-between; }
+.folder-preview-tools label { flex: 1; font-size: 12px; }
+.folder-preview-tools select { display: block; width: 100%; margin-top: 6px; }
+.folder-tree { max-height: 38vh; overflow: auto; border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin: 14px 0; }
+.folder-children { margin-left: 18px; border-left: 1px solid var(--line); padding-left: 8px; }
+.folder-tree-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 7px 0; }
+.folder-toggle { flex-shrink: 0; background: none; color: var(--ink); width: 22px; padding: 0; }
+.folder-node-label { display: flex; align-items: center; gap: 7px; min-width: 80px; flex: 1; font-size: 12px; }
+.folder-node-label input { flex-shrink: 0; margin: 0; }
+.folder-node-name { overflow-wrap: anywhere; }
+.folder-role-name { width: 155px; font-size: 12px; padding: 7px; }
+.folder-preview-samples { max-height: 140px; overflow: auto; background: var(--soft); border-radius: 10px; padding: 10px; }
+.folder-preview-samples p { margin: 3px 0; overflow-wrap: anywhere; }
+#folder-preview-summary { font-size: 12px; }
+#folder-preview-error { color: #a1557c; font-size: 12px; }
+@media (max-width: 700px) { .folder-preview-dialog { padding: 18px; } .folder-children { margin-left: 8px; padding-left: 5px; } .folder-role-name { width: 100%; } }
+
+.folder-preview-actions { position: sticky; bottom: 0; z-index: 2; padding: 12px 0 0; background: var(--panel); border-top: 1px solid var(--line); }

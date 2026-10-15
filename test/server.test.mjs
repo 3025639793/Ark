@@ -27,6 +27,7 @@ test('local-only API protects library operations, supports encrypted imports and
  assert.equal((await request(`/api/libraries/${id}/images`,{method:'POST',body:Buffer.alloc(25*1024*1024+1)})).status,413);
  assert.equal((await request(`/api/libraries/${id}/images/batch-delete`,{method:'POST',body:JSON.stringify({ids:[image.id]})})).status,200);assert.equal((await request(file)).status,404);
  const normal=await (await request('/api/libraries/default/images?filename=hidden.png&folder=collection%2Frole&inferCharacter=true',{method:'POST',body:png})).json();
+ const corrected=await (await request('/api/libraries/default/images?filename=renamed.png&folder=collection%2Frole%2Fwallpapers&character=parent-role&updateDuplicateCharacter=true',{method:'POST',body:png})).json();assert.equal(corrected.duplicate,true);assert.equal(corrected.updated,true);assert.equal(corrected.image.character,'parent-role');
  const mixedFile=`/api/libraries/default/images/${normal.id}/file`;
  assert.equal(normal.character,'role');
  assert.equal((await request('/api/import-session',{method:'POST',body:'{"active":true}'})).status,200);

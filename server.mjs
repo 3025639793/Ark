@@ -16,7 +16,7 @@ async function input(req){try{const value=JSON.parse((await body(req)).toString(
 function equal(value,token){return typeof value==='string'&&value.length===token.length&&timingSafeEqual(Buffer.from(value),Buffer.from(token));}
 export async function startLocalApp({dataDir=process.env.ARK_DATA_DIR||join(root,'data'),port=Number(process.env.PORT||0)}={}){
  const store=new AlbumStore(resolve(dataDir));await store.init();const theme=new ThemeStore(resolve(dataDir));await theme.init();const token=randomBytes(32).toString('hex');
- const assets=new Map(await Promise.all(['index.html','app.js','style.css','theme.css','theme.js','mascot.svg','mascot.png'].map(async file=>['/'+file,await readFile(join(root,'public',file)).catch(error=>{if(file==='mascot.png'&&error.code==='ENOENT')return readFile(join(root,'public','mascot.svg'));throw error;})])));
+ const assets=new Map(await Promise.all(['index.html','folders.js','app.js','style.css','theme.css','theme.js','mascot.svg','mascot.png'].map(async file=>['/'+file,await readFile(join(root,'public',file)).catch(error=>{if(file==='mascot.png'&&error.code==='ENOENT')return readFile(join(root,'public','mascot.svg'));throw error;})])));
  const attempts=new Map();
  const server=http.createServer(async(req,res)=>{
   try{
@@ -70,7 +70,7 @@ export async function startLocalApp({dataDir=process.env.ARK_DATA_DIR||join(root
     if(action==='random'&&req.method==='PATCH'){const value=await input(req);return json(res,200,await store.allowRandom(id,value?.allowRandom));}
     if(action==='images'&&!imageId){
      if(req.method==='GET')return json(res,200,store.list(id));
-     if(req.method==='POST'){store.access(id);const bytes=await body(req,25*1024*1024);return json(res,201,await store.import(id,bytes,url.searchParams.get('filename')||'未命名图片',url.searchParams.get('folder')||'',url.searchParams.get('inferCharacter')==='true'));}
+     if(req.method==='POST'){store.access(id);const bytes=await body(req,25*1024*1024);return json(res,201,await store.import(id,bytes,url.searchParams.get('filename')||'未命名图片',url.searchParams.get('folder')||'',url.searchParams.get('inferCharacter')==='true',url.searchParams.has('character')?url.searchParams.get('character'):undefined,url.searchParams.get('updateDuplicateCharacter')==='true'));}
     }
     if(action==='images'&&imageId){
      if(file&&req.method==='GET'){const {image,bytes}=await store.file(id,imageId);res.writeHead(200,{...headers,'Content-Type':image.mime,'Content-Length':bytes.length,...(url.searchParams.has('download')?{'Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(image.filename).replace(/'/g,'%27')}`}:{})});return res.end(bytes);}

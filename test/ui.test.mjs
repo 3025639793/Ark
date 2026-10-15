@@ -22,10 +22,13 @@ test('album UI imports, edits, creates a vault and removes displayed images on l
   await w.upload([new File([png],'portrait.png',{type:'image/png'})]);assert.equal($('gallery').querySelectorAll('.card').length,1);
   $('gallery').querySelector('.card-open').click();assert.equal($('detail').open,true);const edit=$('edit-form');edit.elements.character.value='芙莉莲';edit.elements.tags.value='壁纸，冬天';edit.dispatchEvent(new w.Event('submit',{cancelable:true}));
   await waitUntil(()=>$('character-list').textContent.includes('芙莉莲'));$('detail').close();
-  const folderFile=new File([png,Buffer.from('folder')],'folder.png',{type:'image/png'});Object.defineProperty(folderFile,'webkitRelativePath',{value:'图片/原神/芙宁娜/folder.png'});
-  const otherFile=new File([png,Buffer.from('other')],'other.png',{type:'image/png'});Object.defineProperty(otherFile,'webkitRelativePath',{value:'图片/其他/other.png'});
+  const folderFile=new File([png,Buffer.from('folder')],'folder.png',{type:'image/png'});Object.defineProperty(folderFile,'webkitRelativePath',{value:'图片/原神/芙宁娜/壁纸/folder.png'});
+  const otherFile=new File([png,Buffer.from('other')],'other.png',{type:'image/png'});Object.defineProperty(otherFile,'webkitRelativePath',{value:'图片/其他/子目录/other.png'});
   const textFile=new File(['hello'],'note.txt',{type:'text/plain'});Object.defineProperty(textFile,'webkitRelativePath',{value:'图片/note.txt'});
   Object.defineProperty($('folder-input'),'files',{configurable:true,value:[folderFile,otherFile,textFile]});$('folder-input').dispatchEvent(new w.Event('change'));
+  await waitUntil(()=>$('folder-preview-dialog').open);assert.equal($('all-count').textContent,'1');$('folder-preview-dialog').close();assert.equal($('all-count').textContent,'1');w.previewFolders([folderFile,otherFile,textFile]);
+  const markRole=path=>{const checkbox=[...$('folder-tree').querySelectorAll('input[type=checkbox]')].find(c=>c.dataset.folder===path);assert.ok(checkbox);checkbox.checked=true;checkbox.dispatchEvent(new w.Event('change'));};
+  markRole('图片');markRole('图片/原神/芙宁娜');markRole('图片/其他');assert.match($('folder-preview-summary').textContent,/2 张已分配角色/);$('folder-start-import').click();
   await waitUntil(()=>$('all-count').textContent==='3'&&!$('folder-trigger').disabled);assert.equal($('gallery').querySelectorAll('.card').length,3);
   $('characters-trigger').click();assert.match($('view-title').textContent,/角色收藏墙/);assert.equal($('gallery').querySelectorAll('.role-card').length,3);assert.equal($('select-toggle').disabled,true);
   $('gallery').querySelector('.role-card .card-open').click();assert.equal($('gallery').querySelectorAll('.role-card').length,0);assert.equal($('gallery').querySelectorAll('.card').length,1);assert.equal($('select-toggle').disabled,false);assert.equal($('view-back').hidden,false);assert.match($('view-back').textContent,/返回角色收藏墙/);assert.match($('storage').textContent,/^1 张图片/);

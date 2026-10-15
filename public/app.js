@@ -107,17 +107,17 @@ document.addEventListener('keydown',event=>{if(['INPUT','TEXTAREA','SELECT'].inc
 $('export').onclick=()=>{if(!currentLibrary()?.unlocked){toast('请先解锁图片库。');return;}if((currentLibrary().encrypted||state.images.some(i=>i.protected&&!i.locked))&&!confirm('将导出未加密的分类信息。确定继续？'))return;const blob=new Blob([JSON.stringify({format:'ark-metadata-v1',exported_at:new Date().toISOString(),images:state.images},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=element('a');a.href=url;a.download=`ark-classifications-${new Date().toISOString().slice(0,10)}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('分类记录已导出（不包含图片原文件）');};
 document.querySelectorAll('.upload-trigger').forEach(b=>b.onclick=()=>$('file-input').click());
 $('folder-trigger').onclick=()=>$('folder-input').click();
-$('folder-input').onchange=event=>{upload([...event.target.files],{preserveFolders:true});event.target.value='';};
+$('folder-input').onchange=event=>{previewFolders([...event.target.files]);event.target.value='';};
 $('file-input').onchange=event=>{upload([...event.target.files]);event.target.value='';};
-async function upload(files,{preserveFolders=false}={}){
+async function upload(files,{preserveFolders=false,roles=new Map(),libraryId=state.libraryId,updateDuplicates=false}={}){
  if(state.uploading){toast('正在导入，请等这批完成后再添加。');return;}if(!files.length)return;
- const allFiles=files;files=files.filter(file=>['image/jpeg','image/png','image/gif','image/webp'].includes(file.type)||/\.(jpe?g|png|gif|webp)$/i.test(file.name));const skipped=allFiles.length-files.length;if(!files.length){toast('未找到支持的图片（JPG / PNG / GIF / WebP）');return;}
- const importLibraryId=state.libraryId;state.uploading=true;$('upload-progress').hidden=false;document.querySelectorAll('.upload-trigger').forEach(b=>b.disabled=true);let successes=0,duplicates=0;const errors=[];$('folder-trigger').disabled=true;
+ const allFiles=files;files=files.filter(ArkFolders.isImage);const skipped=allFiles.length-files.length;if(!files.length){toast('未找到支持的图片（JPG / PNG / GIF / WebP）');return;}
+ const importLibraryId=libraryId;state.uploading=true;$('upload-progress').hidden=false;document.querySelectorAll('.upload-trigger').forEach(b=>b.disabled=true);let successes=0,duplicates=0,corrected=0;const errors=[];$('folder-trigger').disabled=true;
  try{await api('/api/import-session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({active:true})});for(let n=0;n<files.length;n++){const file=files[n];$('upload-progress').textContent=`正在收藏 ${n+1} / ${files.length} · ${file.name}`;
-  try{if(file.size>25*1048576)throw new Error('超过 25 MB');const folder=preserveFolders?(file.webkitRelativePath||'').split('/').slice(0,-1).join('/'):'';const image=await api(`${libraryPath(importLibraryId)}/images?filename=${encodeURIComponent(file.name)}&folder=${encodeURIComponent(folder)}&inferCharacter=${preserveFolders&&$('infer-character').checked}`,{method:'POST',headers:{'Content-Type':file.type},body:file});if(image.duplicate){duplicates++;continue;}if(state.libraryId===importLibraryId)state.images.unshift(image);successes++;if(successes%10===0)render();}
+  try{if(file.size>25*1048576)throw new Error('超过 25 MB');const folder=preserveFolders?ArkFolders.folderOf(file):'';const character=preserveFolders?ArkFolders.characterFor(folder,roles):'';const image=await api(`${libraryPath(importLibraryId)}/images?filename=${encodeURIComponent(file.name)}&folder=${encodeURIComponent(folder)}&character=${encodeURIComponent(character)}&updateDuplicateCharacter=${updateDuplicates}`,{method:'POST',headers:{'Content-Type':file.type},body:file});if(image.duplicate){duplicates++;if(image.updated){corrected++;if(state.libraryId===importLibraryId)replaceImage(image.image);}continue;}if(state.libraryId===importLibraryId)state.images.unshift(image);successes++;if(successes%10===0)render();}
   catch(e){errors.push(`${file.name}：${e.message}`);if(!currentLibrary()?.unlocked)break;}
- }}finally{await api('/api/import-session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({active:false})}).catch(e=>toast(e.message));state.uploading=false;render();$('upload-progress').hidden=true;}
- if(errors.length){$('upload-progress').textContent=`已导入 ${successes} 张，跳过 ${duplicates} 张重复图片，跳过 ${skipped} 个非支持文件。失败 ${errors.length} 张：${errors.join('；')}`;$('upload-progress').hidden=false;}else toast(`已导入 ${successes} 张，跳过 ${duplicates} 张重复图片${preserveFolders?'，文件夹分类已保留':''}${skipped?`，跳过 ${skipped} 个非支持文件`:''}。`);
+ }}catch(e){errors.push(e.message);}finally{await api('/api/import-session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({active:false})}).catch(e=>toast(e.message));state.uploading=false;render();$('upload-progress').hidden=true;}
+ if(errors.length){$('upload-progress').textContent=`已导入 ${successes} 张，跳过 ${duplicates} 张重复图片${corrected?`（已更正 ${corrected} 张的角色）`:''}，跳过 ${skipped} 个非支持文件。失败 ${errors.length} 张：${errors.join('；')}`;$('upload-progress').hidden=false;}else toast(`已导入 ${successes} 张，跳过 ${duplicates} 张重复图片${corrected?`（已更正 ${corrected} 张的角色）`:''}${preserveFolders?'，文件夹分类已保留':''}${skipped?`，跳过 ${skipped} 个非支持文件`:''}。`);
 }
 let dragDepth=0;document.addEventListener('dragenter',event=>{if(!event.dataTransfer?.types.includes('Files'))return;event.preventDefault();dragDepth++;$('drop-overlay').hidden=false;});document.addEventListener('dragover',event=>{if(event.dataTransfer?.types.includes('Files'))event.preventDefault();});document.addEventListener('dragleave',()=>{dragDepth=Math.max(0,dragDepth-1);if(!dragDepth)$('drop-overlay').hidden=true;});document.addEventListener('drop',event=>{if(!event.dataTransfer?.files.length)return;event.preventDefault();dragDepth=0;$('drop-overlay').hidden=true;upload([...event.dataTransfer.files]);});
 
@@ -198,3 +198,38 @@ $('detail').addEventListener('close',()=>{if(state.detailId)releaseSingle(state.
 $('unprotect-image').onclick=async()=>{if(!confirm('解除这张图片的加密？之后无需密码即可查看。'))return;try{await postOperation('unprotect',{id:state.detailId});$('detail').close();await refresh();toast('已解除图片加密');}catch(e){toast(e.message);}};
 $('delete-character').onclick=async()=>{if(!state.character||!confirm(`删除角色分类「${state.character}」？图片会保留，仅清除角色归属。`))return;try{await postOperation('delete-character',{name:state.character});changeView('characters');await refresh();toast('角色分类已删除，图片已保留');}catch(e){toast(e.message);}};
 window.addEventListener('beforeunload',event=>{if(state.uploading){event.preventDefault();event.returnValue='正在导入，请等待完成。';}});
+
+let folderPreview=null;
+function previewFolders(files){
+ if(state.uploading){toast('请等待当前导入完成。');return;}const analysis=ArkFolders.analyze(files);if(!analysis.files.length){toast('未找到支持的图片（JPG / PNG / GIF / WebP）');return;}
+ folderPreview={...analysis,allFiles:files,libraryId:state.libraryId,roles:new Map(),controls:new Map()};
+ $('folder-preview-info').textContent=`目标库：${currentLibrary()?.name||''} · ${analysis.files.length} 张图片 · ${analysis.nodes.length} 个文件夹 · 跳过 ${analysis.skipped} 个非支持文件`;
+ $('folder-update-duplicates').checked=false;$('folder-preview-error').textContent='';
+ const depth=$('folder-role-depth');depth.replaceChildren(new Option('手动选择文件夹','custom'),...Array.from({length:Math.max(0,...analysis.nodes.map(n=>n.depth))},(_,i)=>new Option(`勾选第 ${i+1} 层（所选根目录为第 1 层）`,String(i+1))));
+ const parents=new Set(analysis.nodes.map(n=>n.parent));const containers=new Map([['',$('folder-tree')]]);$('folder-tree').replaceChildren();
+ // Sorting by depth guarantees each parent exists, regardless of its name.
+ for(const node of [...analysis.nodes].sort((a,b)=>a.depth-b.depth||a.path.localeCompare(b.path,'zh'))){
+  const branch=element('div','folder-branch');const row=element('div','folder-tree-row');const children=element('div','folder-children');const toggle=element('button','folder-toggle','▾');toggle.type='button';toggle.setAttribute('aria-label',`折叠 ${node.name}`);toggle.setAttribute('aria-expanded','true');toggle.onclick=()=>{children.hidden=!children.hidden;toggle.textContent=children.hidden?'▸':'▾';toggle.setAttribute('aria-expanded',String(!children.hidden));toggle.setAttribute('aria-label',`${children.hidden?'展开':'折叠'} ${node.name}`);};
+  const hasChildren=parents.has(node.path);toggle.hidden=!hasChildren;
+  const label=element('label','folder-node-label');const checkbox=element('input');checkbox.type='checkbox';checkbox.dataset.folder=node.path;checkbox.setAttribute('aria-label',`将 ${node.path} 作为角色分类`);const name=element('span','folder-node-name',node.name);name.title=node.path;label.append(checkbox,name);
+  const count=element('small','muted',`${node.count} 张（本层 ${node.directCount}）`);const roleName=element('input','folder-role-name');roleName.type='text';roleName.maxLength=200;roleName.value=node.name.slice(0,200);roleName.hidden=true;roleName.setAttribute('aria-label',`${node.path} 的角色名称`);roleName.placeholder='角色名称';
+  checkbox.onchange=()=>{roleName.hidden=!checkbox.checked;if(checkbox.checked)folderPreview.roles.set(node.path,roleName.value);else folderPreview.roles.delete(node.path);depth.value='custom';renderFolderPreview();};roleName.oninput=()=>{if(checkbox.checked)folderPreview.roles.set(node.path,roleName.value);renderFolderPreview();};
+  folderPreview.controls.set(node.path,{checkbox,roleName});row.append(toggle,label,count,roleName);branch.append(row,children);containers.get(node.parent).append(branch);containers.set(node.path,children);
+ }
+ renderFolderPreview();$('folder-preview-dialog').showModal();
+}
+function renderFolderPreview(){
+ if(!folderPreview)return;const {files,roles}=folderPreview;let assigned=0;const names=new Set();for(const file of files){const name=ArkFolders.characterFor(ArkFolders.folderOf(file),roles);if(name){assigned++;names.add(name);}}
+ const invalid=[...roles.values()].some(name=>!name.trim()||name.length>200);$('folder-start-import').disabled=invalid;$('folder-preview-error').textContent=invalid?'勾选的文件夹需要填写角色名称（最多 200 字）。':'';
+ $('folder-preview-summary').textContent=`${names.size} 个角色 · ${assigned} 张已分配角色 · ${files.length-assigned} 张仅保留目录分类。`;
+ $('folder-start-import').textContent=roles.size?'按预览开始导入':'仅保留目录导入';
+ $('folder-preview-samples').replaceChildren(element('p','muted small','分类示例（最多显示 8 张）：'));
+ for(const file of files.slice(0,8)){const folder=ArkFolders.folderOf(file);$('folder-preview-samples').append(element('p','small',`${folder?folder+'/':''}${file.name} → ${ArkFolders.characterFor(folder,roles)||'不设置角色'}`));}
+}
+$('folder-clear-roles').onclick=()=>{if(!folderPreview)return;folderPreview.roles.clear();for(const {checkbox,roleName} of folderPreview.controls.values()){checkbox.checked=false;roleName.hidden=true;}$('folder-role-depth').value='custom';renderFolderPreview();};
+$('folder-role-depth').onchange=event=>{if(!folderPreview||event.target.value==='custom')return;const depth=Number(event.target.value);folderPreview.roles.clear();for(const node of folderPreview.nodes){const {checkbox,roleName}=folderPreview.controls.get(node.path);checkbox.checked=node.depth===depth;roleName.hidden=!checkbox.checked;if(checkbox.checked)folderPreview.roles.set(node.path,roleName.value);}renderFolderPreview();};
+$('folder-start-import').onclick=async()=>{
+ if(!folderPreview||$('folder-start-import').disabled)return;const pending=folderPreview;if(!state.libraries.find(l=>l.id===pending.libraryId)?.unlocked){$('folder-preview-error').textContent='目标图片库已锁定，请取消预览、解锁后重新选择文件夹。';return;}const roles=new Map([...pending.roles].map(([path,name])=>[path,name.trim()]));const updateDuplicates=$('folder-update-duplicates').checked;
+ $('folder-preview-dialog').close();await upload(pending.allFiles,{preserveFolders:true,roles,libraryId:pending.libraryId,updateDuplicates});
+};
+$('folder-preview-dialog').addEventListener('close',()=>{folderPreview=null;$('folder-tree').replaceChildren();$('folder-preview-samples').replaceChildren();});

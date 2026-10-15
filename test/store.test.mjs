@@ -75,3 +75,13 @@ test('content dedup, folder roles, mixed encryption, scopes and deletion preserv
 test('import protection prevents locking and idle expiry',async()=>fixture(async dir=>{
  const store=new AlbumStore(dir);await store.init();store.activeImport=true;assert.throws(()=>store.lockAll(),e=>e.status===409);store.activeImport=false;store.lockAll();
 }));
+
+test('explicit parent role survives nested folders; duplicate corrections are opt-in and preserve encryption',async()=>fixture(async dir=>{
+ const store=new AlbumStore(dir);await store.init();const image=await store.import('default',png,'wallpaper.png','收藏/作品/角色甲/壁纸',false,'角色甲');assert.equal(image.character,'角色甲');assert.equal(image.folder,'收藏/作品/角色甲/壁纸');
+ let result=await store.import('default',png,'renamed.png','收藏/作品/新角色/壁纸',false,'新角色');assert.equal(result.duplicate,true);assert.equal(result.updated,false);assert.equal(store.list('default')[0].character,'角色甲');
+ await store.protect('default',[image.id],password);
+ result=await store.import('default',png,'renamed.png','收藏/作品/新角色/壁纸',false,'新角色',true);assert.equal(result.updated,true);assert.equal(result.image.locked,true);assert.equal(result.image.character,'新角色');assert.equal(store.list('default')[0].folder,'收藏/作品/角色甲/壁纸');
+ await store.import('default',png,'again.png','收藏/作品/未知',false,'',true);assert.equal(store.list('default')[0].character,'新角色');
+ await store.unlockImages('default',image.id,password,'session');assert.equal(store.list('default')[0].character,'新角色');assert.deepEqual((await store.file('default',image.id)).bytes,png);
+ await assert.rejects(store.import('default',png,'invalid.png','收藏',false,'x'.repeat(201)),e=>e.status===400);
+}));
