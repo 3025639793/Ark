@@ -119,3 +119,12 @@ test('an existing standalone image can establish the unified password only after
  await assert.rejects(store.unlockImages('default',image.id,'incorrect','single'),e=>e.status===401);assert.equal(store.state().masterPassword.configured,false);
  await store.unlockImages('default',image.id,'legacy-password','single');assert.equal(store.state().masterPassword.configured,true);assert.equal(store.list('default')[0].legacy,false);store.lockAll();await store.unlockImages('default',image.id,'legacy-password','single');assert.deepEqual((await store.file('default',image.id)).bytes,png);
 }));
+
+test('locked previews persist only 64 RGB samples, reject arbitrary payloads and cannot unlock originals',async()=>fixture(async dir=>{
+ let store=new AlbumStore(dir);await store.init();const image=await store.import('default',png,'private.png');const preview=Buffer.alloc(192,100).toString('base64');
+ await assert.rejects(store.protect('default',[image.id],password,{[image.id]:'data:image/png;base64,full-original'}),e=>e.status===400);
+ await store.protect('default',[image.id],password,{[image.id]:preview});assert.equal(store.list('default')[0].hasPreview,true);assert.equal(store.list('default')[0].preview,undefined);assert.equal((store.preview('default',image.id).toString().match(/<rect /g)||[]).length,64);
+ await assert.rejects(store.file('default',image.id),e=>e.status===423);await assert.rejects(store.setPreview('default',image.id,preview),e=>e.status===423);
+ store.lockAll();store=new AlbumStore(dir);await store.init();assert.equal(store.list('default')[0].hasPreview,true);await assert.rejects(store.file('default',image.id),e=>e.status===423);
+ await store.unlockImages('default',image.id,password,'single');await store.setPreview('default',image.id,Buffer.alloc(192,70).toString('base64'));await store.unprotect('default',image.id);assert.equal(store.list('default')[0].hasPreview,undefined);assert.deepEqual((await store.file('default',image.id)).bytes,png);
+}));

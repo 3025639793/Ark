@@ -33,11 +33,13 @@ test('local-only API protects library operations, supports encrypted imports and
  assert.equal((await request('/api/import-session',{method:'POST',body:'{"active":true}'})).status,200);
  assert.equal((await request('/api/lock-all',{method:'POST'})).status,409);
  await request('/api/import-session',{method:'POST',body:'{"active":false}'});
- assert.equal((await request('/api/libraries/default/protect',{method:'POST',body:JSON.stringify({ids:[normal.id],password:'test-password'})})).status,200);
+ assert.equal((await request('/api/libraries/default/protect',{method:'POST',body:JSON.stringify({ids:[normal.id],password:'test-password',previews:{[normal.id]:Buffer.alloc(192,120).toString('base64')}})})).status,200);
+ const previewPath=mixedFile.replace(/file$/,'preview');assert.equal((await fetch(app.url+previewPath)).status,403);const previewResponse=await fetch(app.url+previewPath,{headers:{cookie}});assert.equal(previewResponse.status,200);assert.match(previewResponse.headers.get('content-type'),/svg/);assert.equal((await previewResponse.text()).match(/<rect /g).length,64);
  assert.equal((await fetch(app.url+mixedFile,{headers:{cookie}})).status,423);
  const duplicate=await (await request('/api/libraries/default/images?filename=renamed.png',{method:'POST',body:png})).json();assert.equal(duplicate.duplicate,true);
  const visible=await (await request('/api/libraries/default/images')).json();assert.equal(visible[0].locked,true);assert.ok(!JSON.stringify(visible).includes('hidden.png'));
  assert.equal((await request('/api/libraries/default/unlock-image',{method:'POST',body:JSON.stringify({id:normal.id,password:'test-password',scope:'single'})})).status,200);
+ assert.equal((await request('/api/libraries/default/preview',{method:'POST',body:JSON.stringify({id:normal.id,preview:'data:image/png;base64,invalid'})})).status,400);assert.equal((await request('/api/libraries/default/preview',{method:'POST',body:JSON.stringify({id:normal.id,preview:Buffer.alloc(192,80).toString('base64')})})).status,200);
  assert.deepEqual(Buffer.from(await (await fetch(app.url+mixedFile,{headers:{cookie}})).arrayBuffer()),png);
  await request('/api/libraries/default/lock-image',{method:'POST',body:JSON.stringify({id:normal.id})});assert.equal((await fetch(app.url+mixedFile,{headers:{cookie}})).status,423);
  assert.equal((await fetch(app.url+'/api/encrypted')).status,403);

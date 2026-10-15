@@ -204,3 +204,11 @@ html:not([data-theme-art='custom']) .melusine-guide span { white-space: normal; 
 #original-image { display: block; max-width: none; max-height: none; flex-shrink: 0; object-fit: contain; user-select: none; }
 .original-info { flex-shrink: 0; margin: 0; padding: 8px 16px; color: #d3c8df; background: #332b43; font-size: 11px; }
 @media (max-width:700px) { .image-stage { padding: 15px 60px; } .original-toolbar { padding: 10px; } #original-caption { max-width: 100%; } .original-controls { gap: 5px; } .original-controls button { font-size: 11px; padding: 6px 8px; } .original-info { font-size: 10px; } }
+
+/* Locked cards show a coarse, irreversibly reduced colour preview and a compact transparent seal. */
+.locked-cover { position: relative; display: block; height: 210px; overflow: hidden; isolation: isolate; background: #4d405b; }
+.locked-cover .card-image { padding: 0; display: block; width: 100%; height: 100%; min-height: 0; max-height: none; object-fit: cover; }
+.locked-cover .locked-placeholder:not(.locked-preview) { background: radial-gradient(ellipse at 25% 35%,#ac8fa4,#6c667f 50%,#43394f); }
+.locked-cover .locked-preview { filter: blur(12px) brightness(.8); transform: scale(1.15); }
+.locked-cover .encryption-overlay { position: absolute; z-index: 1; width: 52%; height: 66%; max-width: 140px; object-fit: contain; left: 50%; top: 46%; transform: translate(-50%,-50%); pointer-events: none; }
+.locked-hint { position: absolute; z-index: 2; bottom: 12px; left: 50%; transform: translateX(-50%); white-space: nowrap; font-size: 11px; padding: 3px 10px; border-radius: 20px; background: #2d2439b8; color: #fff; pointer-events: none; }
