@@ -1,10 +1,10 @@
 // Runs inside the native preview window, using temporary fixture data only.
-const verifyNavigation = async window => {
+const {fixturePng}=require('./image-fixture.cjs');
+const verifyNavigation = async (window,server) => {
+ const roles=[];await server.store.serial(async()=>{for(let n=0;n<100;n++)roles.push(await server.store.import('default',fixturePng(4,4,()=>[n,120,180,255]),'fixture.png','',false,'测试角色 '+n));});
  const run=code=>window.webContents.executeJavaScript(code);
  await run(`(() => {
-  const roles = Array.from({length:100},(_,n)=>({id:String(n),libraryId:'default',filename:'fixture.png',title:'测试图片',mime:'image/png',bytes:1024*1024,created_at:'2026-01-01T00:00:00.000Z',character:'测试角色 '+n,series:'',folder:'',tags:[],favorite:false,artist:'',source:''}));
-  // Use opaque placeholders so no nonexistent fixture image is requested.
-  roles.forEach(image=>{image.locked=true;image.protected=true;});
+  const roles = ${JSON.stringify(roles)};
   state.images=roles;changeView('all');
   const list=document.querySelector('#character-list');list.scrollTop=200;
   document.querySelector('#characters-trigger').click();
@@ -34,7 +34,9 @@ const verifyNavigation = async window => {
   })()`);
  }
  window.webContents.setZoomFactor(1);window.setSize(1280,900);
- await run(`state.images=[];changeView('all');new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))`);
+ await server.store.serial(()=>server.store.removeBatch('default',roles.map(image=>image.id)));
+ await run(`refresh()`);
+ await run(`state.images=[];state.libraryImages=[];changeView('all');new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))`);
  console.log('Native role navigation and header layout verified at five window/zoom combinations.');
 };
 module.exports={verifyNavigation};

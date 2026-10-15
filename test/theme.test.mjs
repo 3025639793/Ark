@@ -13,3 +13,11 @@ test('local theme image and easter-egg settings persist; invalid files preserve 
  await theme.clearImage();assert.equal(theme.state().hasImage,false);await assert.rejects(theme.image(),e=>e.status===404);
  }finally{await rm(directory,{recursive:true,force:true});}
 });
+
+test('each interaction is claimed once and remains claimed after restart and settings changes',async()=>{
+ const directory=await mkdtemp(join(tmpdir(),'ark-once-'));try{
+  let theme=new ThemeStore(directory);await theme.init();assert.equal((await theme.claimEgg('passport')).triggered,true);assert.equal((await theme.claimEgg('passport')).triggered,false);
+  await theme.settings({easterEggs:false});assert.equal((await theme.claimEgg('whisper')).triggered,false);await theme.settings({easterEggs:true});assert.equal((await theme.claimEgg('whisper')).triggered,true);
+  theme=new ThemeStore(directory);await theme.init();assert.equal((await theme.claimEgg('passport')).triggered,false);assert.equal((await theme.claimEgg('whisper')).triggered,false);await assert.rejects(theme.claimEgg('unknown'),error=>error.status===400);
+ }finally{await rm(directory,{recursive:true,force:true});}
+});

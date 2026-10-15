@@ -35,6 +35,7 @@ export async function startLocalApp({dataDir=process.env.ARK_DATA_DIR||join(root
    if(!equal(req.headers['x-ark-token'],token)&&!(req.method==='GET'&&isFile&&equal(cookie,token)))fail(403,'本地访问令牌无效，请重新打开相册。');
    await store.serial(async()=>{
     if(path==='/api/theme'&&req.method==='GET')return json(res,200,theme.state());
+    if(path==='/api/theme/eggs'&&req.method==='POST'){const value=await input(req);return json(res,200,await theme.claimEgg(value.id));}
     if(path==='/api/theme'&&req.method==='PATCH')return json(res,200,await theme.settings(await input(req)));
     if(path==='/api/theme/image'){
      if(req.method==='POST')return json(res,200,await theme.setImage(await body(req,10*1024*1024)));
@@ -49,7 +50,7 @@ export async function startLocalApp({dataDir=process.env.ARK_DATA_DIR||join(root
       case 'protect':result=await store.protect(id,v.ids,v.password,v.previews);break;
       case 'preview':result=await store.setPreview(id,v.id,v.preview);break;
       case 'unlock-image':{const now=Date.now();const attempt=attempts.get('images')||{count:0,until:now+60000};if(attempt.until<=now){attempt.count=0;attempt.until=now+60000;}if(attempt.count>=5)fail(429,'请一分钟后再尝试密码。');try{result=await store.unlockImages(id,v.id,v.password,v.scope,v.legacyPassword);attempts.delete('images');}catch(e){if(e.status===401){attempt.count++;attempts.set('images',attempt);}throw e;}break;}
-      case 'lock-image':store.lockImage(v.id);result={ok:true};break;
+      case 'lock-image':result={ok:true,changed:store.lockImage(v.id)};break;
       case 'unprotect':result=await store.unprotect(id,v.id);break;
       case 'delete-character':result=await store.deleteCharacter(id,v.name);break;
      }return json(res,200,result);
@@ -76,7 +77,7 @@ export async function startLocalApp({dataDir=process.env.ARK_DATA_DIR||join(root
     if(action==='lock'&&req.method==='POST'){if(store.library(id).encrypted)store.lock(id);return json(res,200,store.state());}
     if(action==='random'&&req.method==='PATCH'){const value=await input(req);return json(res,200,await store.allowRandom(id,value?.allowRandom));}
     if(action==='images'&&!imageId){
-     if(req.method==='GET')return json(res,200,store.list(id));
+     if(req.method==='GET')return json(res,200,store.list(id,{includeLocked:false}));
      if(req.method==='POST'){store.access(id);const bytes=await body(req,25*1024*1024);return json(res,201,await store.import(id,bytes,url.searchParams.get('filename')||'未命名图片',url.searchParams.get('folder')||'',url.searchParams.get('inferCharacter')==='true',url.searchParams.has('character')?url.searchParams.get('character'):undefined,url.searchParams.get('updateDuplicateCharacter')==='true'));}
     }
     if(action==='images'&&imageId){

@@ -9,7 +9,7 @@ const token=document.querySelector('meta[name="ark-token"]').content;
 function libraryPath(id=state.libraryId){return `/api/libraries/${id}`;}
 function currentLibrary(){return state.libraries.find(l=>l.id===state.libraryId);}
 async function api(path,options={}){
- if(options.method&&options.method!=='GET'&&!path.endsWith('/preview')&&!path.endsWith('/lock-image'))refreshSequence++;
+ if(options.method&&options.method!=='GET'&&!path.endsWith('/preview')&&!path.endsWith('/lock-image')&&!path.startsWith('/api/theme'))refreshSequence++;
  const response=await fetch(path,{...options,headers:{'X-Ark-Token':token,...options.headers}});
  const value=await response.json();
  if(!response.ok){if(response.status===423){clearSensitiveViews();setTimeout(()=>refresh().catch(()=>{}),0);}throw new Error(value.error||'操作失败，请重试。');}
@@ -38,12 +38,21 @@ async function revealPhoto(frame,image){
  frame.classList.add('media-ready');
 }
 function groups(field,source=state.images){const result=new Map();for(const image of source){if(!image[field])continue;if(!result.has(image[field]))result.set(image[field],[]);result.get(image[field]).push(image);}return [...result].sort((a,b)=>b[1].length-a[1].length||a[0].localeCompare(b[0],'zh'));}
+let randomRanks=new Map();
+function shuffleOrder(){
+ const ids=state.images.map(image=>image.id);for(let i=ids.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[ids[i],ids[j]]=[ids[j],ids[i]];}randomRanks=new Map(ids.map((id,index)=>[id,index]));
+}
+function randomRank(image){if(!randomRanks.has(image.id))randomRanks.set(image.id,Math.random()*(randomRanks.size+1));return randomRanks.get(image.id);}
 function filtered(){
  const query=state.query.toLocaleLowerCase();
- return state.images.filter(i=>(state.view!=='favorite'||i.favorite)&&(state.view!=='unfiled'||(!i.character&&!i.series&&!i.folder&&!i.tags.length))&&(!state.character||i.character===state.character)&&(!state.folder||(i.folder||'')===state.folder||(i.folder||'').startsWith(state.folder+'/'))&&(!state.series||i.series===state.series)&&(!state.tag||i.tags.includes(state.tag))&&(!query||[i.title,i.filename,i.character,i.series,i.folder||'',i.artist,...i.tags].join(' ').toLocaleLowerCase().includes(query))).sort((a,b)=>(state.sort==='new'?(Number(!!(a.protected||a.encrypted))-Number(!!(b.protected||b.encrypted))):0)||(state.sort==='name'?a.title.localeCompare(b.title,'zh'):state.sort==='old'?a.created_at.localeCompare(b.created_at):b.created_at.localeCompare(a.created_at)));
+ return state.images.filter(i=>(state.view==='encrypted'||!i.locked)&&(state.view!=='favorite'||i.favorite)&&(state.view!=='unfiled'||(!i.character&&!i.series&&!i.folder&&!i.tags.length))&&(!state.character||i.character===state.character)&&(!state.folder||(i.folder||'')===state.folder||(i.folder||'').startsWith(state.folder+'/'))&&(!state.series||i.series===state.series)&&(!state.tag||i.tags.includes(state.tag))&&(!query||[i.title,i.filename,i.character,i.series,i.folder||'',i.artist,...i.tags].join(' ').toLocaleLowerCase().includes(query))).sort((a,b)=>{
+  if(state.sort==='random')return randomRank(a)-randomRank(b);
+  return (state.sort==='new'?(Number(!!(a.protected||a.encrypted))-Number(!!(b.protected||b.encrypted))):0)||(state.sort==='name'?a.title.localeCompare(b.title,'zh'):state.sort==='old'?a.created_at.localeCompare(b.created_at):b.created_at.localeCompare(a.created_at));
+ });
 }
 function selectOptions(select,values,selected){select.replaceChildren();select.append(new Option('所有作品',''));for(const value of values)select.append(new Option(value,value));select.value=values.includes(selected)?selected:'';state.series=select.value;}
 function render(){
+ state.libraryImages=state.libraryImages.filter(image=>!image.locked);if(state.view!=='encrypted')state.images=state.images.filter(image=>!image.locked);
  renderUpdate();
  const library=currentLibrary();const encryptedView=state.view==='encrypted';const locked=!encryptedView&&library?.encrypted&&!library.unlocked;const characterWall=state.view==='characters'&&!state.character;
  $('library-select').replaceChildren(...state.libraries.map(l=>new Option(`${l.encrypted?(l.unlocked?'◇ ':'◆ '):''}${l.name}`,l.id)));$('library-select').value=state.libraryId;
@@ -121,12 +130,12 @@ function toggleSelected(id){if(state.deleting)return;state.selected.has(id)?stat
 function replaceImage(image){state.images=state.images.map(i=>i.id===image.id?image:i);}
 async function refresh({poll=false}={}){
  if(poll&&refreshInFlight)return;refreshInFlight++;try{
- const request=++refreshSequence,libraryId=state.libraryId,view=state.view;const current=()=>request===refreshSequence&&libraryId===state.libraryId&&view===state.view;
+ const request=++refreshSequence,libraryId=state.libraryId,view=state.view;const current=()=>request===refreshSequence&&libraryId===state.libraryId;
  const snapshot=await api('/api/state');if(!current())return;
  const unchanged=JSON.stringify(snapshot.libraries)===JSON.stringify(state.libraries)&&snapshot.lockRevision===state.lockRevision&&JSON.stringify(snapshot.masterPassword||{})===JSON.stringify(state.masterPassword);
  applySnapshot(snapshot);if(poll&&unchanged&&state.images.length)return;
  const [rows,collection]=await Promise.all([snapshot.libraries.find(lib=>lib.id===libraryId)?.unlocked?api(`${libraryPath(libraryId)}/images`):Promise.resolve([]),api('/api/encrypted')]);
- if(!current())return;for(const image of [...rows,...collection.images]){const latest=latestPreviews.get(image.id);if(image.protected&&latest&&(image.previewVersion||0)<latest.previewVersion)Object.assign(image,latest);}state.libraryImages=rows;state.encryptedImages=collection.images;state.lockedLibraries=collection.lockedLibraries;state.images=view==='encrypted'?collection.images:rows;render();queueEncryptedPreviews();
+ if(!current())return;for(const image of [...rows,...collection.images]){const latest=latestPreviews.get(image.id);if(image.protected&&latest&&(image.previewVersion||0)<latest.previewVersion)Object.assign(image,latest);}state.libraryImages=rows;state.encryptedImages=collection.images;state.lockedLibraries=collection.lockedLibraries;state.images=state.view==='encrypted'?collection.images:rows;render();queueEncryptedPreviews();
  }finally{refreshInFlight--;}
 }
 function applySnapshot(snapshot){if(snapshot.libraries.some(lib=>!lib.unlocked&&state.libraries.find(previous=>previous.id===lib.id)?.unlocked))clearSensitiveViews();if(state.lockRevision!==undefined&&state.lockRevision!==snapshot.lockRevision)clearSensitiveViews();state.lockRevision=snapshot.lockRevision;state.libraries=snapshot.libraries;state.settings=snapshot.settings;state.masterPassword=snapshot.masterPassword||{};if(!currentLibrary())state.libraryId=state.libraries[0].id;const library=currentLibrary();if(state.view!=='encrypted'&&!library.unlocked&&(state.images.length||state.detailId))clearSensitiveViews();const random=state.randomImage;if(random){const lib=state.libraries.find(l=>l.id===random.libraryId);if(!lib||!lib.unlocked||!lib.allowRandom||(random.encrypted&&!state.settings.allowEncryptedRandom)){stopRandom();state.randomImage=null;$('random-image').removeAttribute('src');$('random-caption').textContent='';$('random-error').textContent='图片库已锁定或不再允许展示。';}}}
@@ -140,7 +149,7 @@ $('lock-all').onclick=async()=>{try{applySnapshot(await api('/api/lock-all',{met
 $('unlock-form').onsubmit=async event=>{event.preventDefault();const button=event.target.querySelector('button');button.disabled=true;$('unlock-error').textContent='';try{await api(`${libraryPath()}/unlock`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:$('unlock-password').value,legacyPassword:$('unlock-legacy-password').value||undefined})});$('unlock-password').value='';$('unlock-legacy-password').value='';await refresh();}catch(e){$('unlock-error').textContent=e.message;}finally{button.disabled=false;}};
 document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>changeView(b.dataset.view));
 $('view-back').onclick=()=>changeView(state.character?'characters':'all');
-$('search').oninput=event=>{state.query=event.target.value;render();};$('folder-filter').onchange=event=>{state.folder=event.target.value;render();};$('series-filter').onchange=event=>{state.series=event.target.value;render();};$('sort').onchange=event=>{state.sort=event.target.value;render();};
+$('search').oninput=event=>{state.query=event.target.value;render();};$('folder-filter').onchange=event=>{state.folder=event.target.value;render();};$('series-filter').onchange=event=>{state.series=event.target.value;render();};$('sort').onchange=event=>{state.sort=event.target.value;if(state.sort==='random')shuffleOrder();render();};
 $('select-toggle').onclick=()=>{state.selecting=!state.selecting;state.selected.clear();render();};$('cancel-select').onclick=()=>{state.selecting=false;state.selected.clear();render();};$('select-all').onclick=()=>{filtered().forEach(i=>state.selected.add(i.id));render();};
 $('batch-edit').onclick=()=>{$('batch-form').reset();$('batch-dialog').showModal();};
 $('batch-form').onsubmit=async event=>{
@@ -266,7 +275,7 @@ $('protection-form').onsubmit=async event=>{
 };
 $('protection-dialog').addEventListener('cancel',event=>{if(protectionBusy)event.preventDefault();});
 $('protection-dialog').addEventListener('close',()=>{if(!$('protection-dialog').open){$('protection-form').reset();for(const id of ['protection-password','protection-confirm','protection-legacy-password'])$(id).type='password';}});
-async function releaseSingle(id,libraryId=state.detailLibraryId||imageLibrary(id)){await postOperation('lock-image',{id},libraryId).catch(()=>{});}
+async function releaseSingle(id,libraryId=state.detailLibraryId||imageLibrary(id)){try{const result=await postOperation('lock-image',{id},libraryId);if(result.changed)await refresh();}catch{}}
 $('detail').addEventListener('close',()=>{if(!$('detail').open){closeOriginalView();if(state.detailId)releaseSingle(state.detailId,state.detailLibraryId);state.detailId='';state.detailLibraryId='';$('detail-image').removeAttribute('src');$('download').removeAttribute('href');$('edit-form').reset();}});
 $('unprotect-image').onclick=async()=>{if(!confirm('解除这张图片的加密？之后无需密码即可查看。'))return;try{await postOperation('unprotect',{id:state.detailId},state.detailLibraryId);$('detail').close();await refresh();toast('已解除图片加密');}catch(e){toast(e.message);}};
 $('protection-show-password').onchange=event=>{for(const id of ['protection-password','protection-confirm','protection-legacy-password'])$(id).type=event.target.checked?'text':'password';};

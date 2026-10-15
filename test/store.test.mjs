@@ -136,3 +136,12 @@ test('blurred thumbnails preserve aspect ratio and replace legacy colour samples
  await assert.rejects(store.setPreview('default',image.id,{...preview,width:65}),e=>e.status===400);await assert.rejects(store.setPreview('default',image.id,{...preview,pixels:'full-original'}),e=>e.status===400);
  await store.setPreview('default',image.id,preview);store.lockAll();const visible=store.list('default')[0];assert.equal(visible.previewVersion,2);assert.equal(visible.locked,true);const bytes=store.preview('default',image.id);assert.equal(bytes.readUInt32BE(16),64);assert.equal(bytes.readUInt32BE(20),48);assert.deepEqual(await readFile(join(dir,'default','images',row.storage)),ciphertext);await assert.rejects(store.file('default',image.id),e=>e.status===423);
 }));
+
+test('normal collections hide locked photos and restore the same classifications during temporary unlock',async()=>fixture(async dir=>{
+ let now=1000;const store=new AlbumStore(dir,{now:()=>now});await store.init();const plain=await store.import('default',png,'plain.png');const hidden=await store.import('default',Buffer.concat([png,Buffer.from('private')]),'private.png','作品/角色/壁纸',false,'角色甲');await store.edit('default',hidden.id,{tags:['标签'],favorite:true});await store.protect('default',[hidden.id],password);
+ const visible=()=>store.list('default',{includeLocked:false});assert.deepEqual(visible().map(image=>image.id),[plain.id]);assert.equal(store.state().libraries[0].count,1);assert.equal(store.encryptedCollection().images[0].id,hidden.id);
+ await store.unlockImages('default',hidden.id,password,'single');let restored=visible().find(image=>image.id===hidden.id);assert.equal(restored.character,'角色甲');assert.equal(restored.folder,'作品/角色/壁纸');assert.deepEqual(restored.tags,['标签']);assert.equal(restored.favorite,true);store.lockImage(hidden.id);assert.deepEqual(visible().map(image=>image.id),[plain.id]);
+ await store.unlockImages('default',hidden.id,password,'5');assert.equal(visible().length,2);now+=300001;assert.deepEqual(visible().map(image=>image.id),[plain.id]);
+ await store.unlockImages('default',hidden.id,password,'session');assert.equal(visible().length,2);store.lockAll();assert.deepEqual(visible().map(image=>image.id),[plain.id]);
+ await store.unlockImages('default',hidden.id,password,'session');await store.unprotect('default',hidden.id);store.lockAll();assert.equal(visible().length,2);assert.equal(visible().find(image=>image.id===hidden.id).folder,'作品/角色/壁纸');
+}));

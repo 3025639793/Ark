@@ -18,7 +18,7 @@ app.whenReady().then(async()=>{
   if(document.querySelectorAll('img[src=\"/mascot.png\"]').length!==1)throw Error('Logo should appear only once inside the album');
   await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
  })()`);
- await require('./verify-navigation.cjs').verifyNavigation(window);
+ await require('./verify-navigation.cjs').verifyNavigation(window,server);
  await require('./verify-folder-preview.cjs').verifyFolderPreview(window);
  await require('./verify-encryption.cjs').verifyEncryption(window,server);
  await require('./verify-original.cjs').verifyOriginal(window,server);

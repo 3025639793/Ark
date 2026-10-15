@@ -5,12 +5,15 @@ module.exports.verifyEncryption=async(window,server)=>{
  const store=server.store;const password=' 统一测试🔐密码 ';
  const bytes=fixturePng(320,240,(x)=>x<160?[235,55,45,255]:[40,60,225,255]);const otherBytes=fixturePng(240,320,(_,y)=>y<160?[40,210,70,255]:[235,195,30,255]);
  let a,b,other;
- await store.serial(async()=>{await store.setupMaster(password);a=await store.import('default',bytes,'fixture-a.png','测试/角色甲',false,'角色甲');other=(await store.create({name:'临时验证库'})).libraries.at(-1).id;b=await store.import(other,otherBytes,'fixture-b.png','测试/角色乙',false,'角色乙');await store.protect('default',[a.id],undefined,{[a.id]:Buffer.alloc(192,100).toString('base64')});await store.protect(other,[b.id]);store.lockAll();});
+ await store.serial(async()=>{await store.setupMaster(password);a=await store.import('default',bytes,'fixture-a.png','测试/角色甲',false,'角色甲');other=(await store.create({name:'临时验证库'})).libraries.at(-1).id;b=await store.import(other,otherBytes,'fixture-b.png','测试/角色乙',false,'角色乙');await store.edit('default',a.id,{favorite:true,tags:['测试标签']});await store.protect('default',[a.id],undefined,{[a.id]:Buffer.alloc(192,100).toString('base64')});await store.protect(other,[b.id]);store.lockAll();});
  await window.webContents.executeJavaScript(`(async()=>{
   const password=${JSON.stringify(password)};const id=${JSON.stringify(a.id)};
   const wait=async check=>{const until=Date.now()+15000;while(!check()){if(Date.now()>until)throw Error('Native encryption UI timed out');await new Promise(resolve=>setTimeout(resolve,25));}};
   await refresh();changeView('encrypted');await wait(()=>document.querySelectorAll('#gallery .card').length===2);
   if([...document.querySelectorAll('#gallery .card-image')].some(img=>(img.getAttribute('src')||'').endsWith('/file')))throw Error('Locked aggregate must not request thumbnails');
+  changeView('all');await refresh();
+  for(const view of ['all','favorite','unfiled','characters']){changeView(view);if(document.querySelectorAll('#gallery .card').length||document.querySelectorAll('#character-list .character-link').length||document.getElementById('all-count').textContent!=='0')throw Error('Locked photos must be absent from every normal gallery, role and count');}
+  changeView('encrypted');await refresh();
   const lockedNodes=[...document.querySelectorAll('#gallery .card-image')];
   openDetail(id);document.getElementById('protection-password').value=password;document.getElementById('protection-form').requestSubmit();
   await wait(()=>document.getElementById('detail').open&&!document.getElementById('protection-dialog').open);
@@ -27,7 +30,7 @@ module.exports.verifyEncryption=async(window,server)=>{
   await wait(()=>state.encryptedImages.every(image=>image.previewVersion===2));
   const originalNodes=[...document.querySelectorAll('#gallery .card-image')];await Promise.all(originalNodes.map(image=>image.decode()));
   const resourceCount=()=>performance.getEntriesByType('resource').filter(entry=>entry.name.endsWith('/file')).length;const before=resourceCount();
-  for(const order of ['name','old','new']){document.getElementById('sort').value=order;document.getElementById('sort').dispatchEvent(new Event('change'));}
+  for(const order of ['name','old','random','new']){document.getElementById('sort').value=order;document.getElementById('sort').dispatchEvent(new Event('change'));if(order==='random'){const ordered=[...document.getElementById('gallery').children];render();if(ordered.some((card,index)=>document.getElementById('gallery').children[index]!==card))throw Error('Random sorting must remain stable during rendering');}}
   await refresh();await new Promise(resolve=>setTimeout(resolve,150));
   if(originalNodes.some(node=>!node.isConnected)||resourceCount()!==before)throw Error('Sorting and refreshing must retain decoded image elements without reloading originals');
   openDetail(id);document.getElementById('view-original').click();
@@ -56,6 +59,11 @@ module.exports.verifyEncryption=async(window,server)=>{
    await api('/api/lock-all',{method:'POST'});await refresh();releaseDecode();await new Promise(resolve=>setTimeout(resolve,100));
    if(cards.some(card=>!card.isConnected)||frames.some(frame=>frame.classList.contains('media-ready')||frame.querySelector('.card-image').hasAttribute('src')))throw Error('A late decode must not reveal a newly locked original');
   }finally{releaseDecode();HTMLImageElement.prototype.decode=nativeDecode;}
+  await api('/api/unlock-matching',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password,scope:'session'})});await refresh();changeView('all');await refresh();
+  if(state.images.length!==1||state.images[0].id!==id||state.images[0].character!=='角色甲'||state.images[0].folder!=='测试/角色甲')throw Error('Temporary unlock must restore original location and role');
+  changeView('favorite');if(document.querySelectorAll('#gallery .card').length!==1)throw Error('Temporary unlock must restore favorites');changeView('characters');if(document.querySelectorAll('#gallery .role-card').length!==1)throw Error('Temporary unlock must restore role wall');
+  await api('/api/lock-all',{method:'POST'});await refresh();if(document.querySelectorAll('#gallery .card').length||document.querySelectorAll('#character-list .character-link').length)throw Error('Relocking must hide restored photos from normal locations');
+  changeView('encrypted');await refresh();if(document.querySelectorAll('#gallery .locked-preview').length!==2)throw Error('Relocked photos must remain accessible in the encrypted collection');
   const seal=document.querySelector('.encryption-overlay');await seal.decode();if(!seal.naturalWidth)throw Error('Transparent encryption seal did not load');const frame=seal.parentElement.getBoundingClientRect(),bounds=seal.getBoundingClientRect();if(bounds.width>=frame.width*.8||bounds.height>=frame.height*.8)throw Error('Seal must leave the blurred preview visible around it');
  })()`);
  const screenshot=await window.webContents.capturePage();await fs.mkdir('release',{recursive:true});await fs.writeFile('release/encrypted-covers.png',screenshot.toPNG());
