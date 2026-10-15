@@ -85,3 +85,37 @@ test('explicit parent role survives nested folders; duplicate corrections are op
  await store.unlockImages('default',image.id,password,'session');assert.equal(store.list('default')[0].character,'新角色');assert.deepEqual((await store.file('default',image.id)).bytes,png);
  await assert.rejects(store.import('default',png,'invalid.png','收藏',false,'x'.repeat(201)),e=>e.status===400);
 }));
+
+test('one master password opens multiple libraries, preserves locations and supports single/timed/session grants after restart',async()=>fixture(async dir=>{
+ const secret=' 测试统一🔐密码  ';let now=100000;let store=new AlbumStore(dir,{now:()=>now});await store.init();await store.setupMaster(secret);
+ const a=await store.import('default',png,'a.png','收藏/角色甲/壁纸',false,'角色甲');const snapshot=await store.create({name:'第二库'});const lib=snapshot.libraries.at(-1).id;const b=await store.import(lib,png,'b.png','角色乙/头像',false,'角色乙');
+ await store.protect('default',[a.id]);await store.protect(lib,[b.id]);assert.equal(store.encryptedCollection().images.length,2);assert.equal(store.list('default')[0].character,'角色甲');
+ store.lockAll();store=new AlbumStore(dir,{now:()=>now});await store.init();await assert.rejects(store.unlockImages('default',a.id,secret.trim(),'single'),e=>e.status===401);assert.equal(store.imageKeys.size,0);
+ await store.unlockImages('default',a.id,secret,'single');assert.deepEqual((await store.file('default',a.id)).bytes,png);await assert.rejects(store.file(lib,b.id),e=>e.status===423);assert.ok(store.encryptedCollection().images.every(i=>i.locked));store.lockImage(a.id);
+ const result=await store.unlockMatching(secret,'5');assert.equal(result.count,2);assert.equal(store.encryptedCollection().images.filter(i=>!i.locked).length,2);now+=300001;store.state();assert.ok(store.encryptedCollection().images.every(i=>i.locked));
+ await store.unlockMatching(secret,'session');await store.unprotect(lib,b.id);assert.equal(store.encryptedCollection().images.length,1);assert.equal(store.list(lib)[0].folder,'角色乙/头像');assert.equal(store.list(lib)[0].character,'角色乙');
+ store.lockAll();assert.equal(store.masterKey,null);await assert.rejects(store.protect(lib,[b.id]),e=>e.status===423);
+}));
+
+test('legacy image password migration preserves ciphertext and uses the master password afterwards',async()=>fixture(async dir=>{
+ let store=new AlbumStore(dir);await store.init();const a=await store.import('default',png,'legacy.png','角色/壁纸');await store.protect('default',[a.id],'old-password');
+ const row=store.catalogs.get('default')[0];delete row.wrappedKey;delete row.keyCheck;delete store.registry.master;store.lockAll();await store.saveRegistry();await store.saveCatalog(store.library('default'),[row]);const cipher=await readFile(join(dir,'default','images',row.storage));
+ await store.setupMaster('new-master-password');await assert.rejects(store.unlockImages('default',a.id,'new-master-password','single'),e=>e.status===401);
+ await store.unlockImages('default',a.id,'new-master-password','single','old-password');assert.equal(store.list('default')[0].legacy,false);assert.deepEqual(await readFile(join(dir,'default','images',row.storage)),cipher);
+ store.lockAll();store=new AlbumStore(dir);await store.init();await store.unlockImages('default',a.id,'new-master-password','single');assert.deepEqual((await store.file('default',a.id)).bytes,png);
+}));
+
+test('legacy whole-library migration and data failures are distinguished from wrong passwords',async()=>fixture(async dir=>{
+ let store=new AlbumStore(dir);await store.init();const snapshot=await store.create({name:'旧库',encrypted:true,password:'old-vault-password'});const id=snapshot.libraries.at(-1).id;const image=await store.import(id,png,'secret.png');
+ const lib=store.library(id);delete lib.wrappedKey;delete lib.keyCheck;delete store.registry.master;store.lockAll();await store.saveRegistry();await store.setupMaster('new-master-password');
+ await store.unlock(id,'new-master-password','session','old-vault-password');assert.deepEqual((await store.file(id,image.id)).bytes,png);assert.ok(lib.wrappedKey);
+ const key=Buffer.from(store.unlocked.get(id).key);const {encrypt}=await import('../lib/store.mjs');store.lock(id);await writeFile(store.catalogPath(lib),encrypt(Buffer.from('{bad JSON'),key));key.fill(0);
+ await assert.rejects(store.unlock(id,'new-master-password'),e=>e.status===500&&e.message.includes('格式损坏'));
+ await assert.rejects(store.unlock(id,'wrong-password'),e=>e.status===401);
+}));
+
+test('an existing standalone image can establish the unified password only after its old password is verified',async()=>fixture(async dir=>{
+ let store=new AlbumStore(dir);await store.init();const image=await store.import('default',png,'legacy.png');await store.protect('default',[image.id],'legacy-password');const row=store.catalogs.get('default')[0];delete row.wrappedKey;delete row.keyCheck;delete store.registry.master;store.lockAll();await store.saveRegistry();await store.saveCatalog(store.library('default'),[row]);store=new AlbumStore(dir);await store.init();
+ await assert.rejects(store.unlockImages('default',image.id,'incorrect','single'),e=>e.status===401);assert.equal(store.state().masterPassword.configured,false);
+ await store.unlockImages('default',image.id,'legacy-password','single');assert.equal(store.state().masterPassword.configured,true);assert.equal(store.list('default')[0].legacy,false);store.lockAll();await store.unlockImages('default',image.id,'legacy-password','single');assert.deepEqual((await store.file('default',image.id)).bytes,png);
+}));

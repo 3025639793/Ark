@@ -170,3 +170,15 @@ html:not([data-theme-art='custom']) .melusine-guide span { white-space: normal; 
 @media (max-width: 700px) { .folder-preview-dialog { padding: 18px; } .folder-children { margin-left: 8px; padding-left: 5px; } .folder-role-name { width: 100%; } }
 
 .folder-preview-actions { position: sticky; bottom: 0; z-index: 2; padding: 12px 0 0; background: var(--panel); border-top: 1px solid var(--line); }
+
+.encrypted-tools { margin: 0 0 20px; padding: 16px; border: 1px solid var(--line); background: var(--soft); border-radius: 14px; }
+.encrypted-tools>div { display: flex; flex-wrap: wrap; gap: 10px; }
+.encrypted-tools p { margin: 8px 0 0; }
+.encrypted-legacy-libraries { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
+.encrypted-library-card { border: 1px solid var(--line); border-radius: 14px; padding: 16px; background: var(--panel); }
+.encrypted-library-card h3 { margin: 0; font-size: 14px; }
+
+.sidebar { overflow-y: auto; }
+.sidebar-section { min-height: 90px; }
+.sidebar>.brand, .sidebar>.library-picker, .sidebar>nav, .sidebar>.village-note, .sidebar>.sidebar-footer { flex-shrink: 0; }
+@media (max-width:700px) { .sidebar-section { min-height: 0; } }

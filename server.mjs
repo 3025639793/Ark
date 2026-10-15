@@ -47,11 +47,17 @@ export async function startLocalApp({dataDir=process.env.ARK_DATA_DIR||join(root
      const v=await input(req);const id=operation[1];let result;
      switch(operation[2]){
       case 'protect':result=await store.protect(id,v.ids,v.password);break;
-      case 'unlock-image':{const now=Date.now();const attempt=attempts.get('images')||{count:0,until:now+60000};if(attempt.until<=now){attempt.count=0;attempt.until=now+60000;}if(attempt.count>=5)fail(429,'请一分钟后再尝试密码。');try{result=await store.unlockImages(id,v.id,v.password,v.scope);attempts.delete('images');}catch(e){if(e.status===401){attempt.count++;attempts.set('images',attempt);}throw e;}break;}
+      case 'unlock-image':{const now=Date.now();const attempt=attempts.get('images')||{count:0,until:now+60000};if(attempt.until<=now){attempt.count=0;attempt.until=now+60000;}if(attempt.count>=5)fail(429,'请一分钟后再尝试密码。');try{result=await store.unlockImages(id,v.id,v.password,v.scope,v.legacyPassword);attempts.delete('images');}catch(e){if(e.status===401){attempt.count++;attempts.set('images',attempt);}throw e;}break;}
       case 'lock-image':store.lockImage(v.id);result={ok:true};break;
       case 'unprotect':result=await store.unprotect(id,v.id);break;
       case 'delete-character':result=await store.deleteCharacter(id,v.name);break;
      }return json(res,200,result);
+    }
+    if(path==='/api/master-password'&&req.method==='POST'){const v=await input(req);return json(res,200,await store.setupMaster(v.password));}
+    if(path==='/api/encrypted'&&req.method==='GET')return json(res,200,store.encryptedCollection());
+    if(path==='/api/unlock-matching'&&req.method==='POST'){
+     const v=await input(req);const now=Date.now();const attempt=attempts.get('matching')||{count:0,until:now+60000};if(attempt.until<=now){attempt.count=0;attempt.until=now+60000;}if(attempt.count>=5)fail(429,'尝试次数过多，请一分钟后重试。');
+     try{const result=await store.unlockMatching(v.password,v.scope,v.legacyPassword);attempts.delete('matching');return json(res,200,result);}catch(e){if(e.status===401){attempt.count++;attempts.set('matching',attempt);}throw e;}
     }
     if(path==='/api/state'&&req.method==='GET')return json(res,200,store.state());
     if(path==='/api/settings'&&req.method==='PATCH')return json(res,200,await store.settings(await input(req)));
@@ -64,7 +70,7 @@ export async function startLocalApp({dataDir=process.env.ARK_DATA_DIR||join(root
     if(!match)fail(404,'接口不存在。');const [,id,action,imageId,file]=match;store.library(id);
     if(action==='unlock'&&req.method==='POST'){
      const now=Date.now();const attempt=attempts.get(id)||{count:0,until:now+60000};if(attempt.until<=now){attempt.count=0;attempt.until=now+60000;}if(attempt.count>=5)fail(429,'尝试次数过多，请一分钟后重试。');
-     const value=await input(req);try{const result=await store.unlock(id,value?.password);attempts.delete(id);return json(res,200,result);}catch(e){if(e.status===401){attempt.count++;attempts.set(id,attempt);}throw e;}
+     const value=await input(req);try{const result=await store.unlock(id,value?.password,value?.scope,value?.legacyPassword);attempts.delete(id);return json(res,200,result);}catch(e){if(e.status===401){attempt.count++;attempts.set(id,attempt);}throw e;}
     }
     if(action==='lock'&&req.method==='POST'){if(store.library(id).encrypted)store.lock(id);return json(res,200,store.state());}
     if(action==='random'&&req.method==='PATCH'){const value=await input(req);return json(res,200,await store.allowRandom(id,value?.allowRandom));}

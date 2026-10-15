@@ -33,12 +33,17 @@ test('local-only API protects library operations, supports encrypted imports and
  assert.equal((await request('/api/import-session',{method:'POST',body:'{"active":true}'})).status,200);
  assert.equal((await request('/api/lock-all',{method:'POST'})).status,409);
  await request('/api/import-session',{method:'POST',body:'{"active":false}'});
- assert.equal((await request('/api/libraries/default/protect',{method:'POST',body:JSON.stringify({ids:[normal.id],password:'test-photo-password'})})).status,200);
+ assert.equal((await request('/api/libraries/default/protect',{method:'POST',body:JSON.stringify({ids:[normal.id],password:'test-password'})})).status,200);
  assert.equal((await fetch(app.url+mixedFile,{headers:{cookie}})).status,423);
  const duplicate=await (await request('/api/libraries/default/images?filename=renamed.png',{method:'POST',body:png})).json();assert.equal(duplicate.duplicate,true);
  const visible=await (await request('/api/libraries/default/images')).json();assert.equal(visible[0].locked,true);assert.ok(!JSON.stringify(visible).includes('hidden.png'));
- assert.equal((await request('/api/libraries/default/unlock-image',{method:'POST',body:JSON.stringify({id:normal.id,password:'test-photo-password',scope:'single'})})).status,200);
+ assert.equal((await request('/api/libraries/default/unlock-image',{method:'POST',body:JSON.stringify({id:normal.id,password:'test-password',scope:'single'})})).status,200);
  assert.deepEqual(Buffer.from(await (await fetch(app.url+mixedFile,{headers:{cookie}})).arrayBuffer()),png);
  await request('/api/libraries/default/lock-image',{method:'POST',body:JSON.stringify({id:normal.id})});assert.equal((await fetch(app.url+mixedFile,{headers:{cookie}})).status,423);
+ assert.equal((await fetch(app.url+'/api/encrypted')).status,403);
+ const aggregate=await (await request('/api/encrypted')).json();assert.equal(aggregate.images.length,1);assert.equal(aggregate.images[0].libraryId,'default');assert.equal(aggregate.images[0].locked,true);assert.ok(!JSON.stringify(aggregate).includes('wrappedKey'));
+ assert.equal((await request('/api/unlock-matching',{method:'POST',body:JSON.stringify({password:'incorrect',scope:'session'})})).status,401);
+ const unlockAll=await request('/api/unlock-matching',{method:'POST',body:JSON.stringify({password:'test-password',scope:'5'})});assert.equal(unlockAll.status,200);assert.equal((await unlockAll.json()).count,1);
+ assert.equal((await fetch(app.url+mixedFile,{headers:{cookie}})).status,200);await request('/api/lock-all',{method:'POST'});assert.equal((await fetch(app.url+mixedFile,{headers:{cookie}})).status,423);
  }finally{await app?.close();await rm(dir,{recursive:true,force:true});}
 });
