@@ -1,16 +1,35 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,rm} from 'node:fs/promises';
+import {mkdtemp,mkdir,writeFile,rm} from 'node:fs/promises';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {JSDOM,VirtualConsole} from 'jsdom';
 import {startLocalApp} from '../server.mjs';
 const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=','base64');
 async function waitUntil(fn){const deadline=Date.now()+10000;while(!fn()){if(Date.now()>deadline)throw Error('UI condition timed out');await new Promise(resolve=>setTimeout(resolve,20));}}
+test('starter settings require deletion confirmation, retain personal images and allow an explicit re-add',async()=>{
+ const dir=await mkdtemp(join(tmpdir(),'ark-starter-ui-')),starterDir=join(dir,'starter');let app,dom;const errors=[];
+ try{
+  await mkdir(starterDir);await writeFile(join(starterDir,'melusine.png'),png);await writeFile(join(starterDir,'manifest.json'),JSON.stringify({version:'1',images:[{file:'melusine.png'}]}));
+  app=await startLocalApp({dataDir:join(dir,'data'),starterDir});const console=new VirtualConsole();console.on('jsdomError',error=>errors.push(error.message));
+  dom=await JSDOM.fromURL(app.url,{resources:'usable',runScripts:'dangerously',virtualConsole:console,beforeParse(window){
+   window.fetch=(url,options={})=>fetch(new URL(url,window.location.href),options);window.confirm=()=>false;
+   window.HTMLDialogElement.prototype.showModal=function(){this.open=true;};window.HTMLDialogElement.prototype.close=function(){if(this.open){this.open=false;this.dispatchEvent(new window.Event('close'));}};
+  }});
+  const w=dom.window,$=id=>w.document.getElementById(id);await waitUntil(()=>$('gallery').querySelectorAll('.card').length===1);
+  await w.upload([new File([png,Buffer.from('personal')],'personal.png',{type:'image/png'})]);const personal=app.store.list('default').find(image=>image.filename==='personal.png');
+  $('settings-trigger').click();assert.equal($('starter-images-settings').hidden,false);assert.equal($('remove-starter-images').hidden,false);
+  $('remove-starter-images').click();assert.equal(app.store.list('default').length,2);
+  w.confirm=()=>true;$('remove-starter-images').click();assert.equal($('remove-starter-images').disabled,true);
+  await waitUntil(()=>$('starter-images-status').textContent.includes('已删除 1 张')&&!$('add-starter-images').disabled);
+  assert.equal(app.store.list('default').length,1);assert.equal(app.store.list('default')[0].id,personal.id);assert.equal($('gallery').querySelectorAll('.card').length,1);
+  $('add-starter-images').click();await waitUntil(()=>$('starter-images-status').textContent.includes('已添加 1 张')&&!$('remove-starter-images').disabled);assert.equal(app.store.list('default').length,2);assert.deepEqual(errors,[]);
+ }finally{dom?.window.close();await app?.close();await rm(dir,{recursive:true,force:true});}
+});
 test('album UI imports, edits, creates a vault and removes displayed images on lock',async()=>{
  const dir=await mkdtemp(join(tmpdir(),'ark-ui-'));let app,dom;const errors=[];let updateListener;let installed=0;
  try{
-  app=await startLocalApp({dataDir:dir});const console=new VirtualConsole();console.on('jsdomError',e=>errors.push(e.message));
+  app=await startLocalApp({dataDir:dir,starterDir:null});const console=new VirtualConsole();console.on('jsdomError',e=>errors.push(e.message));
   dom=await JSDOM.fromURL(app.url,{resources:'usable',runScripts:'dangerously',virtualConsole:console,beforeParse(window){
    window.fetch=(url,options={})=>fetch(new URL(url,window.location.href),options);
    window.HTMLDialogElement.prototype.showModal=function(){this.open=true;};

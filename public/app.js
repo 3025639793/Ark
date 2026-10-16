@@ -1,5 +1,5 @@
 const $ = id => document.getElementById(id);
-const state = { images: [], view: 'all', character: '', tag: '', query: '', series: '', folder: '', deleting: false, backingUp:false, processing:false, visibleLimit:120, sort: 'new', selecting: false, selected: new Set(), detailId: '', detailLibraryId:'', libraryImages:[], encryptedImages:[], lockedLibraries:[], masterPassword:{}, uploading: false, libraries: [], libraryId: 'default', settings: {}, randomImage: null };
+const state = { starterImages:{available:false,total:0,count:0,error:''}, starterBusy:'', starterMessage:'', images: [], view: 'all', character: '', tag: '', query: '', series: '', folder: '', deleting: false, backingUp:false, processing:false, visibleLimit:120, sort: 'new', selecting: false, selected: new Set(), detailId: '', detailLibraryId:'', libraryImages:[], encryptedImages:[], lockedLibraries:[], masterPassword:{}, uploading: false, libraries: [], libraryId: 'default', settings: {}, randomImage: null };
 let toastTimer;
 let refreshSequence=0,refreshInFlight=0;
 const latestPreviews=new Map();
@@ -64,7 +64,7 @@ function filtered(){
 function selectOptions(select,values,selected){select.replaceChildren();select.append(new Option('所有作品',''));for(const value of values)select.append(new Option(value,value));select.value=values.includes(selected)?selected:'';state.series=select.value;}
 function render(){
  state.libraryImages=state.libraryImages.filter(image=>!image.locked);if(state.view!=='encrypted')state.images=state.images.filter(image=>!image.locked);
- renderUpdate();
+ renderUpdate();renderStarterImages();
  const busy=state.uploading||state.deleting||state.backingUp||state.processing;
  for(const id of ['new-library','folder-trigger','select-toggle','lock-all','backup-data'])$(id).disabled=busy;
  const library=currentLibrary();const encryptedView=state.view==='encrypted';const locked=!encryptedView&&library?.encrypted&&!library.unlocked;const characterWall=state.view==='characters'&&!state.character;
@@ -152,7 +152,7 @@ async function refresh({poll=false}={}){
  if(!current())return;for(const image of [...rows,...collection.images]){const latest=latestPreviews.get(image.id);if(image.protected&&latest&&(image.previewVersion||0)<latest.previewVersion)Object.assign(image,latest);}state.libraryImages=rows;state.encryptedImages=collection.images;state.lockedLibraries=collection.lockedLibraries;state.images=state.view==='encrypted'?collection.images:rows;render();queueEncryptedPreviews();
  }finally{refreshInFlight--;}
 }
-function applySnapshot(snapshot){if(snapshot.libraries.some(lib=>!lib.unlocked&&state.libraries.find(previous=>previous.id===lib.id)?.unlocked))clearSensitiveViews();if(state.lockRevision!==undefined&&state.lockRevision!==snapshot.lockRevision)clearSensitiveViews();state.lockRevision=snapshot.lockRevision;state.libraries=snapshot.libraries;state.settings=snapshot.settings;state.masterPassword=snapshot.masterPassword||{};if(!currentLibrary())state.libraryId=state.libraries[0].id;const library=currentLibrary();if(state.view!=='encrypted'&&!library.unlocked&&(state.images.length||state.detailId))clearSensitiveViews();const random=state.randomImage;if(random){const lib=state.libraries.find(l=>l.id===random.libraryId);if(!lib||!lib.unlocked||!lib.allowRandom||(random.encrypted&&!state.settings.allowEncryptedRandom)){stopRandom();state.randomImage=null;$('random-image').removeAttribute('src');$('random-caption').textContent='';$('random-error').textContent='图片库已锁定或不再允许展示。';}}}
+function applySnapshot(snapshot){if(snapshot.starterImages)state.starterImages=snapshot.starterImages;if(snapshot.libraries.some(lib=>!lib.unlocked&&state.libraries.find(previous=>previous.id===lib.id)?.unlocked))clearSensitiveViews();if(state.lockRevision!==undefined&&state.lockRevision!==snapshot.lockRevision)clearSensitiveViews();state.lockRevision=snapshot.lockRevision;state.libraries=snapshot.libraries;state.settings=snapshot.settings;state.masterPassword=snapshot.masterPassword||{};if(!currentLibrary())state.libraryId=state.libraries[0].id;const library=currentLibrary();if(state.view!=='encrypted'&&!library.unlocked&&(state.images.length||state.detailId))clearSensitiveViews();const random=state.randomImage;if(random){const lib=state.libraries.find(l=>l.id===random.libraryId);if(!lib||!lib.unlocked||!lib.allowRandom||(random.encrypted&&!state.settings.allowEncryptedRandom)){stopRandom();state.randomImage=null;$('random-image').removeAttribute('src');$('random-caption').textContent='';$('random-error').textContent='图片库已锁定或不再允许展示。';}}}
 
 function openDetail(id,unlockedImage){closeOriginalView();const image=unlockedImage||state.images.find(i=>i.id===id);if(!image)return;if(image.locked){showProtection('unlock',[id],image.libraryId);return;}if(state.detailId&&state.detailId!==id)releaseSingle(state.detailId);state.detailId=id;state.detailLibraryId=image.libraryId;$('protect-image').hidden=!!image.protected||!!state.libraries.find(l=>l.id===image.libraryId)?.encrypted;$('unprotect-image').hidden=!image.protected;for(const input of $('edit-form').elements)input.disabled=false;setImageSource($('detail-image'),fileURL(image));$('detail-image').alt=image.title;const form=$('edit-form');for(const field of ['title','character','series','folder','artist','source'])form.elements[field].value=image[field]||'';form.elements.tags.value=image.tags.join('，');form.elements.favorite.checked=image.favorite;$('image-info').textContent=`${image.filename} · ${(image.bytes/1048576).toFixed(2)} MB · ${new Date(image.created_at).toLocaleDateString()}`;$('download').href=fileURL(image)+'?download=1';if(!$('detail').open)$('detail').showModal();}
 function navigateDetail(delta){const images=filtered();const index=images.findIndex(i=>i.id===state.detailId);if(images.length)openDetail(images[(index+delta+images.length)%images.length].id);}
@@ -423,3 +423,23 @@ if(window.arkDesktop?.backupData){
   catch(error){$('backup-status').textContent=`备份未完成：${error.message}`;}finally{state.backingUp=false;await refresh().catch(()=>{});render();}
  };
 }else $('backup-status').textContent='退出软件后，复制完整数据文件夹即可备份。';
+
+function renderStarterImages(){
+ const pack=state.starterImages,busy=state.uploading||state.deleting||state.backingUp||state.processing;
+ $('starter-images-settings').hidden=!pack.available&&!pack.count&&!pack.error;
+ $('add-starter-images').hidden=!pack.available||pack.count>0;$('add-starter-images').disabled=busy;
+ $('remove-starter-images').hidden=!pack.count;$('remove-starter-images').disabled=busy;
+ $('starter-images-status').textContent=state.starterBusy||state.starterMessage||pack.error||(pack.count?`还剩 ${pack.count} 张初始图片。`:'尚未添加初始图片，可按需添加。');
+}
+async function changeStarterImages(method){
+ if(state.uploading||state.deleting||state.backingUp||state.processing)return;
+ if(method==='DELETE'&&!confirm(`删除 ${state.starterImages.count} 张初始图片？你自己导入的图片会保留，删除后不会自动添加。`))return;
+ state.processing=true;state.starterMessage='';state.starterBusy=method==='DELETE'?'正在删除初始图片…':'正在添加初始图片…';render();
+ try{const result=await api('/api/starter-images',{method});
+  if(method==='DELETE'){removeEverywhere(result.deletedIds);if(result.deletedIds.includes(state.detailId)){$('detail').close();closeOriginalView();}if(result.deletedIds.includes(state.randomImage?.id))$('random-dialog').close();state.starterMessage=`已删除 ${result.deletedIds.length} 张初始图片。${result.cleanupFailures?'部分文件清理失败，请检查数据目录权限。':''}`;}
+  else state.starterMessage=`已添加 ${result.added} 张初始图片${result.skipped?`，跳过 ${result.skipped} 张已有图片`:''}。`;
+ }catch(error){state.starterMessage=error.message;}
+ finally{state.processing=false;state.starterBusy='';await refresh().catch(()=>{});render();}
+}
+$('add-starter-images').onclick=()=>changeStarterImages('POST');
+$('remove-starter-images').onclick=()=>changeStarterImages('DELETE');

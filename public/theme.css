@@ -241,3 +241,7 @@ dialog[open] { animation: dialog-arrive .16s ease-out; }
 
 #tag-list:empty { min-height: 20px; padding: 10px 0; }
 #settings-dialog .detail-top { position: sticky; top: -26px; z-index: 3; background: var(--panel); padding: 12px 0; }
+
+.starter-settings { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 18px; }
+.starter-settings h3 { font-size: 14px; margin: 0 0 8px; }
+.starter-settings p { line-height: 1.7; }

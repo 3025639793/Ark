@@ -10,7 +10,7 @@
     "start": "electron .",
     "start:local": "node server.mjs",
     "test": "node --test test/*.test.mjs",
-    "check": "node --check server.mjs && node --check lib/store.mjs && node --check lib/backup.mjs && node --check lib/preview.mjs && node --check public/folders.js && node --check public/app.js && node --check desktop/main.cjs && node --check desktop/preload.cjs && node --check desktop/updater.cjs && node --check lib/theme.mjs && node --check public/theme.js",
+    "check": "node --check server.mjs && node --check lib/store.mjs && node --check lib/backup.mjs && node --check lib/starter.mjs && node --check lib/preview.mjs && node --check public/folders.js && node --check public/app.js && node --check desktop/main.cjs && node --check desktop/preload.cjs && node --check desktop/updater.cjs && node --check lib/theme.mjs && node --check public/theme.js",
     "build:win": "electron-builder --win",
     "build:linux": "electron-builder --linux dir"
   },
@@ -32,6 +32,7 @@
       "desktop/**/*",
       "public/**/*",
       "lib/**/*",
+      "starter/**/*",
       "server.mjs",
       "package.json"
     ],

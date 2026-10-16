@@ -5,7 +5,7 @@ const path=require('node:path');
 let server,window,dir;
 app.whenReady().then(async()=>{
  dir=await fs.mkdtemp(path.join(os.tmpdir(),'ark-theme-preview-'));
- const {startLocalApp}=await import('../server.mjs');server=await startLocalApp({dataDir:dir});
+ const {startLocalApp}=await import('../server.mjs');server=await startLocalApp({dataDir:dir,starterDir:null});
  window=new BrowserWindow({width:1280,height:900,backgroundColor:'#f4effb',autoHideMenuBar:true,webPreferences:{sandbox:true,contextIsolation:true,nodeIntegration:false}});
  const errors=[];window.webContents.on('console-message',(_event,level,message)=>{if(level===3)errors.push(message);});
  await window.loadURL(server.url);

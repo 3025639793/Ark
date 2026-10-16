@@ -5,6 +5,7 @@ import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AlbumStore, fail } from './lib/store.mjs';
 import { ThemeStore } from './lib/theme.mjs';
+import { StarterCollection } from './lib/starter.mjs';
 const root=dirname(fileURLToPath(import.meta.url));
 const headers={
  'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','Cache-Control':'no-store',
@@ -14,8 +15,8 @@ function json(res,status,value){res.writeHead(status,{...headers,'Content-Type':
 async function body(req,limit=32768){if(Number(req.headers['content-length'])>limit)fail(413,'导入文件太大，单张最多 25 MB。');let size=0;const chunks=[];for await(const chunk of req){size+=chunk.length;if(size>limit)fail(413,'请求内容超出限制。');chunks.push(chunk);}return Buffer.concat(chunks);}
 async function input(req,limit){try{const value=JSON.parse((await body(req,limit)).toString());if(!value||typeof value!=='object'||Array.isArray(value))fail(400,'请求格式有误。');return value;}catch(e){if(e.status)throw e;fail(400,'请求格式有误。');}}
 function equal(value,token){return typeof value==='string'&&/^[a-f0-9]{64}$/.test(value)&&value.length===token.length&&timingSafeEqual(Buffer.from(value),Buffer.from(token));}
-export async function startLocalApp({dataDir=process.env.ARK_DATA_DIR||join(root,'data'),port=Number(process.env.PORT||0)}={}){
- const store=new AlbumStore(resolve(dataDir));await store.init();const theme=new ThemeStore(resolve(dataDir));await theme.init();const token=randomBytes(32).toString('hex');
+export async function startLocalApp({dataDir=process.env.ARK_DATA_DIR||join(root,'data'),port=Number(process.env.PORT||0),starterDir=join(root,'starter')}={}){
+ const store=new AlbumStore(resolve(dataDir));await store.init();store.starterCollection=new StarterCollection(store,starterDir);await store.starterCollection.init();const theme=new ThemeStore(resolve(dataDir));await theme.init();const token=randomBytes(32).toString('hex');
  const assets=new Map(await Promise.all(['index.html','folders.js','app.js','style.css','theme.css','theme.js','mascot.svg','mascot.png','encryption-overlay.png'].map(async file=>['/'+file,await readFile(join(root,'public',file)).catch(error=>{if(file==='mascot.png'&&error.code==='ENOENT')return readFile(join(root,'public','mascot.svg'));throw error;})])));
  const attempts=new Map();
  const server=http.createServer(async(req,res)=>{
@@ -61,6 +62,8 @@ export async function startLocalApp({dataDir=process.env.ARK_DATA_DIR||join(root
      const v=await input(req);const now=Date.now();const attempt=attempts.get('matching')||{count:0,until:now+60000};if(attempt.until<=now){attempt.count=0;attempt.until=now+60000;}if(attempt.count>=5)fail(429,'尝试次数过多，请一分钟后重试。');
      try{const result=await store.unlockMatching(v.password,v.scope,v.legacyPassword);attempts.delete('matching');return json(res,200,result);}catch(e){if(e.status===401){attempt.count++;attempts.set('matching',attempt);}throw e;}
     }
+    if(path==='/api/starter-images'&&req.method==='POST')return json(res,200,await store.starterCollection.add());
+    if(path==='/api/starter-images'&&req.method==='DELETE')return json(res,200,await store.starterCollection.remove());
     if(path==='/api/state'&&req.method==='GET')return json(res,200,store.state());
     if(path==='/api/settings'&&req.method==='PATCH')return json(res,200,await store.settings(await input(req)));
     if(path==='/api/random'&&req.method==='POST')return json(res,200,store.random(await input(req)));

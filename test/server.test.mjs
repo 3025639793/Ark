@@ -10,7 +10,7 @@ const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42
 test('shutdown drains pending work, locks keys and closes unused browser connections',async()=>{
  const dir=await mkdtemp(join(tmpdir(),'ark-shutdown-'));let app,socket,timer;
  try{
-  app=await startLocalApp({dataDir:dir});await app.store.setupMaster('shutdown-password');
+  app=await startLocalApp({dataDir:dir,starterDir:null});await app.store.setupMaster('shutdown-password');
   socket=net.connect(Number(new URL(app.url).port),'127.0.0.1');await new Promise((resolve,reject)=>{socket.once('connect',resolve);socket.once('error',reject);});
   let completed=false;app.store.serial(async()=>{await new Promise(resolve=>setTimeout(resolve,50));completed=true;});
   await Promise.race([app.close(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Idle browser connection blocked shutdown')),2000);})]);
@@ -20,7 +20,7 @@ test('shutdown drains pending work, locks keys and closes unused browser connect
 test('local-only API protects library operations, supports encrypted imports and blocks locked files',async()=>{
  const dir=await mkdtemp(join(tmpdir(),'ark-api-'));let app;
  try{
- app=await startLocalApp({dataDir:dir});const root=await fetch(app.url);const token=/<meta name="ark-token" content="([a-f0-9]{64})">/.exec(await root.text())[1];const cookie=root.headers.get('set-cookie').split(';')[0];
+ app=await startLocalApp({dataDir:dir,starterDir:null});const root=await fetch(app.url);const token=/<meta name="ark-token" content="([a-f0-9]{64})">/.exec(await root.text())[1];const cookie=root.headers.get('set-cookie').split(';')[0];
  const request=(path,options={})=>fetch(app.url+path,{...options,headers:{'X-Ark-Token':token,...options.headers}});
  assert.equal((await fetch(app.url+'/api/state')).status,403);assert.equal((await fetch(app.url+'/api/state',{headers:{'X-Ark-Token':'é'.repeat(64)}})).status,403);
  const wrongHost=await new Promise((resolve,reject)=>{const req=http.get(app.url+'/api/state',{headers:{Host:'attacker.example','X-Ark-Token':token}},res=>{res.resume();resolve(res.statusCode);});req.on('error',reject);});assert.equal(wrongHost,403);
