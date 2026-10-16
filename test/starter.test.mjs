@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {mkdtemp,mkdir,writeFile,readFile,readdir,rm} from 'node:fs/promises';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
+import {createHash} from 'node:crypto';
+import {fileURLToPath} from 'node:url';
 import {startLocalApp} from '../server.mjs';
 import {fixturePng} from '../scripts/image-fixture.cjs';
 
@@ -12,6 +14,24 @@ async function fixture(){
  await writeFile(join(starterDir,'manifest.json'),JSON.stringify({version:'1',images:images.map((_,i)=>({file:`melusine-${i}.png`,title:`美露莘 ${i}`,character:i?'希格雯':'爱贝尔'}))}));
  return {root,starterDir,dataDir,images,async start(){return startLocalApp({dataDir,starterDir});}};
 }
+test('metadata-cleaned samples recognize the original imports and retain personal ownership after encryption',async()=>{
+ const f=await fixture();let app;try{
+  const originals=f.images.map((image,index)=>Buffer.concat([image,Buffer.from(`original-metadata-${index}`)]));const manifest=JSON.parse(await readFile(join(f.starterDir,'manifest.json'),'utf8'));
+  manifest.images.forEach((entry,index)=>{entry.sourceHash=createHash('sha256').update(originals[index]).digest('hex');});await writeFile(join(f.starterDir,'manifest.json'),JSON.stringify(manifest));
+  app=await startLocalApp({dataDir:f.dataDir,starterDir:null});const personal=await app.store.import('default',originals[0],'personal.png');await app.close();app=await f.start();
+  const result=await app.store.serial(()=>app.store.starterCollection.add());assert.deepEqual(result,{added:1,skipped:1});const sample=app.store.list('default').find(image=>image.id!==personal.id);
+  await app.store.protect('default',[sample.id],'starter-test-password');const adopted=await app.store.import('default',originals[1],'original.png');assert.equal(adopted.duplicate,true);assert.equal(adopted.id,sample.id);assert.equal(app.store.state().starterImages.count,0);
+  assert.deepEqual((await app.store.starterCollection.remove()).deletedIds,[]);assert.equal(app.store.list('default').length,2);
+ }finally{await app?.close();await rm(f.root,{recursive:true,force:true});}
+});
+test('the bundled starter collection is complete, installs on a new profile and stays removed after restart',async()=>{
+ const dataDir=await mkdtemp(join(tmpdir(),'ark-bundled-starter-')),starterDir=fileURLToPath(new URL('../starter/',import.meta.url));let app;try{
+  const manifest=JSON.parse(await readFile(join(starterDir,'manifest.json'),'utf8'));assert.equal(manifest.images.length,20);
+  app=await startLocalApp({dataDir,starterDir});assert.equal(app.store.state().starterImages.error,'');assert.equal(app.store.state().starterImages.count,manifest.images.length);assert.equal(app.store.list('default').length,manifest.images.length);
+  for(const image of app.store.list('default'))assert.ok((await app.store.file('default',image.id)).bytes.length>0);
+  await app.store.serial(()=>app.store.starterCollection.remove());await app.close();app=await startLocalApp({dataDir,starterDir});assert.equal(app.store.state().starterImages.count,0);assert.equal(app.store.list('default').length,0);
+ }finally{await app?.close();await rm(dataDir,{recursive:true,force:true});}
+});
 test('starter images are seeded once; encrypted and reclassified samples are removable without deleting personal imports',async()=>{
  const f=await fixture();let app;try{
   app=await f.start();const store=app.store;assert.equal(store.state().starterImages.count,2);assert.equal(store.list('default')[0].series,'原神');

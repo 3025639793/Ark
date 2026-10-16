@@ -439,7 +439,7 @@ async function changeStarterImages(method){
   if(method==='DELETE'){removeEverywhere(result.deletedIds);if(result.deletedIds.includes(state.detailId)){$('detail').close();closeOriginalView();}if(result.deletedIds.includes(state.randomImage?.id))$('random-dialog').close();state.starterMessage=`已删除 ${result.deletedIds.length} 张初始图片。${result.cleanupFailures?'部分文件清理失败，请检查数据目录权限。':''}`;}
   else state.starterMessage=`已添加 ${result.added} 张初始图片${result.skipped?`，跳过 ${result.skipped} 张已有图片`:''}。`;
  }catch(error){state.starterMessage=error.message;}
- finally{state.processing=false;state.starterBusy='';await refresh().catch(()=>{});render();}
+ finally{await refresh().catch(()=>{});state.processing=false;state.starterBusy='';render();}
 }
 $('add-starter-images').onclick=()=>changeStarterImages('POST');
 $('remove-starter-images').onclick=()=>changeStarterImages('DELETE');

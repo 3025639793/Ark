@@ -40,9 +40,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $previous = Join-Path $env:RUNNER_TEMP 'ark-previous-installer'
-          gh release download v0.10.0 --repo $env:GITHUB_REPOSITORY --pattern 'Ark-Setup-0.10.0-x64.exe' --dir $previous
+          gh release download v1.0.0 --repo $env:GITHUB_REPOSITORY --pattern 'Ark-Setup-1.0.0-x64.exe' --dir $previous
           if ($LASTEXITCODE -ne 0) { throw 'Previous installer download failed' }
-          node scripts/verify-installation.cjs (Join-Path $previous 'Ark-Setup-0.10.0-x64.exe')
+          node scripts/verify-installation.cjs (Join-Path $previous 'Ark-Setup-1.0.0-x64.exe') '1.0.0'
           if ($LASTEXITCODE -ne 0) { throw 'Installation or upgrade verification failed' }
       - name: Add checksum
         shell: pwsh

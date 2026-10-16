@@ -23,6 +23,10 @@ app.whenReady().then(async()=>{
  await require('./verify-encryption.cjs').verifyEncryption(window,server);
  await require('./verify-original.cjs').verifyOriginal(window,server);
  await require('./verify-gallery.cjs').verifyGallery(window,server);
+ const {StarterCollection}=await import('../lib/starter.mjs');server.store.starterCollection=new StarterCollection(server.store,path.join(__dirname,'../starter'));await server.store.starterCollection.init();
+ const personalId=await require('./verify-starter.cjs').verifyStarter(window);
+ await server.store.serial(()=>server.store.remove('default',personalId));await server.store.serial(()=>server.store.starterCollection.add());
+ await window.webContents.executeJavaScript(`(async()=>{await refresh();await Promise.all([...document.querySelectorAll('#gallery img')].map(image=>image.decode().catch(()=>{})));await new Promise(resolve=>setTimeout(resolve,300));})()`);
  if(errors.length)throw new Error(errors.join('\n'));
  const screenshot=await window.webContents.capturePage();await fs.mkdir('release',{recursive:true});await fs.writeFile('release/preview.png',screenshot.toPNG());
  window.destroy();await server.close();await fs.rm(dir,{recursive:true,force:true});console.log('Native Electron theme initialized; preview captured.');app.exit(0);
